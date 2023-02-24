@@ -45,7 +45,7 @@ def main(args):
     print("Using {} device training.".format(device.type))
 
     # 用来保存coco_info的文件
-    results_file = "results{}.txt".format(datetime.datetime.now().strftime("%Y%m%d-%H%M%S"))
+    results_file = "./save_weights/results{}.txt".format(datetime.datetime.now().strftime("%Y%m%d-%H%M%S"))
 
     data_transform = {
         "train": transforms.Compose([transforms.ToTensor(),
@@ -187,7 +187,7 @@ if __name__ == "__main__":
     # 训练设备类型
     parser.add_argument('--device', default='cuda:0', help='device')
     # 训练数据集的根目录(VOCdevkit)
-    parser.add_argument('--data_path', default='./data/test', help='dataset')
+    parser.add_argument('--data_path', default='./coco2017', help='dataset')
     # 检测目标类别数(不包含背景)
     parser.add_argument('--num_classes', default=1, type=int, help='num_classes')
     # 文件保存地址
