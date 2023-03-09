@@ -9,6 +9,7 @@ from backbone import resnet50_fpn_backbone
 from my_dataset_coco import CocoDetection
 from train_utils import GroupedBatchSampler, create_aspect_ratio_groups
 from train_utils import train_eval_utils as utils
+import plot_curve
 
 
 def create_model(num_classes, load_pretrain_weights=True):
@@ -22,7 +23,7 @@ def create_model(num_classes, load_pretrain_weights=True):
                                      trainable_layers=3)
     # 训练自己数据集时不要修改这里的91，修改的是传入的num_classes参数
     model = FasterRCNN(backbone=backbone, num_classes=91)
-    
+
     if load_pretrain_weights:
         # 载入预训练模型权重
         # https://download.pytorch.org/models/fasterrcnn_resnet50_fpn_coco-258fb6c6.pth
@@ -45,7 +46,9 @@ def main(args):
     print("Using {} device training.".format(device.type))
 
     # 用来保存coco_info的文件
-    results_file = "./save_weights/results{}.txt".format(datetime.datetime.now().strftime("%Y%m%d-%H%M%S"))
+    # results_file = "./save_weights/results{}.txt".format(datetime.datetime.now().strftime("%Y%m%d-%H%M%S"))
+    results_file = "./save_weights/results.txt"
+    visdom_file = "./save_weights/visdom.log"
 
     data_transform = {
         "train": transforms.Compose([transforms.ToTensor(),
@@ -119,7 +122,9 @@ def main(args):
                                                    gamma=0.33)
 
     # 如果指定了上次训练保存的权重文件地址，则接着上次结果接着训练
+    viz = plot_curve.create_visdom(visdom_file)
     if args.resume != "":
+        plot_curve.load_visdom(viz, visdom_file)
         checkpoint = torch.load(args.resume, map_location='cpu')
         model.load_state_dict(checkpoint['model'])
         optimizer.load_state_dict(checkpoint['optimizer'])
@@ -135,10 +140,10 @@ def main(args):
 
     for epoch in range(args.start_epoch, args.epochs):
         # train for one epoch, printing every 10 iterations
-        mean_loss, lr = utils.train_one_epoch(model, optimizer, train_data_loader,
-                                              device=device, epoch=epoch,
-                                              print_freq=50, warmup=True,
-                                              scaler=scaler)
+        mean_loss, loss_dict, lr = utils.train_one_epoch(model, optimizer, train_data_loader,
+                                                         device=device, epoch=epoch,
+                                                         print_freq=50, warmup=True,
+                                                         scaler=scaler)
         train_loss.append(mean_loss.item())
         learning_rate.append(lr)
 
@@ -146,7 +151,10 @@ def main(args):
         lr_scheduler.step()
 
         # evaluate on the test dataset
-        coco_info = utils.evaluate(model, val_data_set_loader, device=device)
+        # todo: 最后一个epoch，才绘制pr曲线
+        # todo: 拿到所有ap、ar信息，分别保存
+        # todo: 所有损失
+        coco_info = utils.evaluate(model, val_data_set_loader, epoch, args.epochs - 1, viz, device=device)
 
         # write into txt
         with open(results_file, "a") as f:
@@ -166,6 +174,22 @@ def main(args):
         if args.amp:
             save_files["scaler"] = scaler.state_dict()
         torch.save(save_files, "./save_weights/resNetFpn-model-{}.pth".format(epoch))
+
+        # 损失曲线
+        plot_curve.visdom_draw(viz, mean_loss, epoch, title='Loss', ylabel='loss')
+        plot_curve.visdom_draw(viz, loss_dict['loss_classifier'], epoch, title='Loss Classifier', ylabel='loss')
+        plot_curve.visdom_draw(viz, loss_dict['loss_box_reg'], epoch, title='Loss Box Reg', ylabel='loss')
+        plot_curve.visdom_draw(viz, loss_dict['loss_objectness'], epoch, title='Loss Objectness', ylabel='loss')
+        plot_curve.visdom_draw(viz, loss_dict['loss_rpn_box_reg'], epoch, title='Loss Rpn Box Reg', ylabel='loss')
+        # ap ar
+        plot_curve.visdom_draw(viz, coco_info[0], epoch, title='mAP', ylabel='mAP')
+        plot_curve.visdom_draw(viz, coco_info[3], epoch, title='AP Small', ylabel='AP')
+        plot_curve.visdom_draw(viz, coco_info[4], epoch, title='AP Medium', ylabel='AP')
+        plot_curve.visdom_draw(viz, coco_info[5], epoch, title='AP Large', ylabel='AP')
+        plot_curve.visdom_draw(viz, coco_info[9], epoch, title='AR Small', ylabel='AR')
+        plot_curve.visdom_draw(viz, coco_info[10], epoch, title='AR Medium', ylabel='AR')
+        plot_curve.visdom_draw(viz, coco_info[11], epoch, title='AR Large', ylabel='AR')
+        # pr
 
     # plot loss and lr curve
     if len(train_loss) != 0 and len(learning_rate) != 0:
@@ -187,7 +211,7 @@ if __name__ == "__main__":
     # 训练设备类型
     parser.add_argument('--device', default='cuda:0', help='device')
     # 训练数据集的根目录(VOCdevkit)
-    parser.add_argument('--data_path', default='./coco2017', help='dataset')
+    parser.add_argument('--data_path', default='./data/test', help='dataset')
     # 检测目标类别数(不包含背景)
     parser.add_argument('--num_classes', default=1, type=int, help='num_classes')
     # 文件保存地址
@@ -200,7 +224,7 @@ if __name__ == "__main__":
     parser.add_argument('--epochs', default=20, type=int, metavar='N',
                         help='number of total epochs to run')
     # 学习率
-    parser.add_argument('--lr', default=0.01, type=float,
+    parser.add_argument('--lr', default=0.005, type=float,
                         help='initial learning rate, 0.02 is the default value for training '
                              'on 8 gpus and 2 images_per_gpu')
     # SGD的momentum参数
@@ -211,11 +235,11 @@ if __name__ == "__main__":
                         metavar='W', help='weight decay (default: 1e-4)',
                         dest='weight_decay')
     # 训练的batch size
-    parser.add_argument('--batch_size', default=4, type=int, metavar='N',
+    parser.add_argument('--batch_size', default=2, type=int, metavar='N',
                         help='batch size when training.')
     parser.add_argument('--aspect-ratio-group-factor', default=3, type=int)
     # 是否使用混合精度训练(需要GPU支持混合精度)
-    parser.add_argument("--amp", default=True, help="Use torch.cuda.amp for mixed precision training")
+    parser.add_argument("--amp", default=False, help="Use torch.cuda.amp for mixed precision training")
 
     args = parser.parse_args()
     print(args)

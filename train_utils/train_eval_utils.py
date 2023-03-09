@@ -2,11 +2,14 @@ import math
 import sys
 import time
 
+import matplotlib.pyplot as plt
 import torch
+import numpy as np
 
 from .coco_utils import get_coco_api_from_dataset
 from .coco_eval import CocoEvaluator
 import train_utils.distributed_utils as utils
+import plot_curve
 
 
 def train_one_epoch(model, optimizer, data_loader, device, epoch,
@@ -24,7 +27,10 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch,
         lr_scheduler = utils.warmup_lr_scheduler(optimizer, warmup_iters, warmup_factor)
 
     mloss = torch.zeros(1).to(device)  # mean losses
-    for i, [images, targets] in enumerate(metric_logger.log_every(data_loader, print_freq, header)):
+    for i, [org_ul_images, targets] in enumerate(metric_logger.log_every(data_loader, print_freq, header)):
+        images = [org_ul_image[0] for org_ul_image in org_ul_images]
+        # ul_images = [org_ul_image[1] for org_ul_image in org_ul_images]
+
         images = list(image.to(device) for image in images)
         targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
 
@@ -62,11 +68,11 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch,
         now_lr = optimizer.param_groups[0]["lr"]
         metric_logger.update(lr=now_lr)
 
-    return mloss, now_lr
+    return mloss, loss_dict, now_lr
 
 
 @torch.no_grad()
-def evaluate(model, data_loader, device):
+def evaluate(model, data_loader, epoch, last_epoch, viz, device):
 
     cpu_device = torch.device("cpu")
     model.eval()
@@ -81,8 +87,8 @@ def evaluate(model, data_loader, device):
     iou_types = _get_iou_types(model)
     coco_evaluator = CocoEvaluator(coco, iou_types)
 
-    for image, targets in metric_logger.log_every(data_loader, 100, header):
-        image = list(img.to(device) for img in image)
+    for images, targets in metric_logger.log_every(data_loader, 100, header):
+        image = list(imgs[0].to(device) for imgs in images)
 
         # 当使用CPU时，跳过GPU相关指令
         if device != torch.device("cpu"):
@@ -109,6 +115,11 @@ def evaluate(model, data_loader, device):
     # accumulate predictions from all images
     coco_evaluator.accumulate()
     coco_evaluator.summarize()
+
+    # coco_evaluator找到数据，绘制pr曲线
+    if epoch == last_epoch:
+        # evaluate_predictions_on_coco(coco_evaluator.coco_eval[iou_types[0]])
+        plot_curve.visdom_pr(viz, coco_evaluator.coco_eval[iou_types[0]])
 
     coco_info = coco_evaluator.coco_eval[iou_types[0]].stats.tolist()  # numpy to list
 

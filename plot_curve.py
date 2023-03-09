@@ -1,5 +1,55 @@
 import datetime
 import matplotlib.pyplot as plt
+import torch
+from visdom import Visdom
+import numpy as np
+
+
+def create_visdom(visdom_file):
+    viz = Visdom(env="demo", log_to_filename=visdom_file)
+    return viz
+
+
+def load_visdom(viz, visdom_file):
+    Visdom.replay_log(viz, log_filename=visdom_file)
+
+
+def visdom_draw(viz, value, epoch, title='title', ylabel='ylabel'):
+    if isinstance(value, torch.Tensor):
+        value = value.tolist()
+    else:
+        value = [value]
+
+    opts = {
+        "title": title,
+        "xlabel": 'epoch',
+        "ylabel": ylabel,
+        "width": 300,
+        "height": 200,
+        "legend": [ylabel]
+    }
+
+    viz.line(X=[epoch], Y=[value], win=title, update='append', opts=opts)
+
+
+def visdom_pr(viz, coco_eval):
+    pr_arr1 = coco_eval.eval['precision'][0, :, 0, 0, 2].tolist()
+    pr_arr2 = coco_eval.eval['precision'][4, :, 0, 0, 2].tolist()
+    pr_arr3 = coco_eval.eval['precision'][8, :, 0, 0, 2].tolist()
+
+    opts = {
+        "title": "Precision Recall Curve",
+        "xlabel": 'recall',
+        "ylabel": 'precision',
+        "width": 300,
+        "height": 200,
+    }
+
+    x = np.arange(0.0, 1.01, 0.01).tolist()
+
+    viz.line(X=x, Y=pr_arr1, name="IOU=0.5", win="Precision Recall Curve", opts=opts)
+    viz.line(X=x, Y=pr_arr2, name="IOU=0.7", win="Precision Recall Curve", opts=opts, update='append')
+    viz.line(X=x, Y=pr_arr3, name="IOU=0.9", win="Precision Recall Curve", opts=opts, update='append')
 
 
 def plot_loss_and_lr(train_loss, learning_rate):
