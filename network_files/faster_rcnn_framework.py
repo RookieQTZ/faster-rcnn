@@ -288,7 +288,7 @@ class FasterRCNN(FasterRCNNBase):
         # 若anchor生成器为空，则自动生成针对resnet50_fpn的anchor生成器
         # todo：anchors比例
         if rpn_anchor_generator is None:
-            anchor_sizes = ((64,), (128,), (256,)) # 32 512
+            anchor_sizes = ((64,), (128,), (256,))  # 32 512
             aspect_ratios = ((0.5, 1.0, 2.0),) * len(anchor_sizes)
             rpn_anchor_generator = AnchorsGenerator(
                 anchor_sizes, aspect_ratios
@@ -297,7 +297,7 @@ class FasterRCNN(FasterRCNNBase):
         # 生成RPN通过滑动窗口预测网络部分
         if rpn_head is None:
             rpn_head = RPNHead(
-                out_channels, rpn_anchor_generator.num_anchors_per_location()[0]
+                out_channels, rpn_anchor_generator.num_anchors_per_location()#[0]
             )
 
         # 默认rpn_pre_nms_top_n_train = 2000, rpn_pre_nms_top_n_test = 1000,

@@ -28,6 +28,10 @@ def create_model(num_classes, load_pretrain_weights=True):
         # 载入预训练模型权重
         # https://download.pytorch.org/models/fasterrcnn_resnet50_fpn_coco-258fb6c6.pth
         weights_dict = torch.load("fasterrcnn_resnet50_fpn_coco.pth", map_location='cpu')
+        weights_dict.pop('rpn.head.cls_logits.weight')
+        weights_dict.pop('rpn.head.cls_logits.bias')
+        weights_dict.pop('rpn.head.bbox_pred.weight')
+        weights_dict.pop('rpn.head.bbox_pred.bias')
         missing_keys, unexpected_keys = model.load_state_dict(weights_dict, strict=False)
         if len(missing_keys) != 0 or len(unexpected_keys) != 0:
             print("missing_keys: ", missing_keys)
@@ -221,7 +225,7 @@ if __name__ == "__main__":
     # 指定接着从哪个epoch数开始训练
     parser.add_argument('--start_epoch', default=0, type=int, help='start epoch')
     # 训练的总epoch数
-    parser.add_argument('--epochs', default=20, type=int, metavar='N',
+    parser.add_argument('--epochs', default=10, type=int, metavar='N',
                         help='number of total epochs to run')
     # 学习率
     parser.add_argument('--lr', default=0.005, type=float,

@@ -110,7 +110,9 @@ class AnchorsGenerator(nn.Module):
 
     def num_anchors_per_location(self):
         # 计算每个预测特征层上每个滑动窗口的预测目标数
-        return [len(s) * len(a) for s, a in zip(self.sizes, self.aspect_ratios)]
+        # fixme: 每个预测特征层滑动窗口预测目标数是一样的
+        # return [len(s) * len(a) for s, a in zip(self.sizes, self.aspect_ratios)]
+        return len(self.sizes) * len(self.aspect_ratios)
 
     # For every combination of (a, (g, s), i) in (self.cell_anchors, zip(grid_sizes, strides), 0:2),
     # output g[i] anchors that are s[i] distance apart in direction i, with the same dimensions as a.
@@ -128,7 +130,10 @@ class AnchorsGenerator(nn.Module):
         assert cell_anchors is not None
 
         # 遍历每个预测特征层的grid_size，strides和cell_anchors
-        for size, stride, base_anchors in zip(grid_sizes, strides, cell_anchors):
+        # fixme: cell anchor尺度错误
+        base_anchors = torch.cat(cell_anchors)
+        # cell_anchors = cell_anchors * len(grid_sizes)
+        for size, stride in zip(grid_sizes, strides):
             grid_height, grid_width = size
             stride_height, stride_width = stride
             device = base_anchors.device
