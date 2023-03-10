@@ -286,8 +286,9 @@ class FasterRCNN(FasterRCNNBase):
         out_channels = backbone.out_channels
 
         # 若anchor生成器为空，则自动生成针对resnet50_fpn的anchor生成器
+        # todo：anchors比例
         if rpn_anchor_generator is None:
-            anchor_sizes = ((32,), (64,), (128,), (256,), (512,))
+            anchor_sizes = ((64,), (128,), (256,)) # 32 512
             aspect_ratios = ((0.5, 1.0, 2.0),) * len(anchor_sizes)
             rpn_anchor_generator = AnchorsGenerator(
                 anchor_sizes, aspect_ratios
