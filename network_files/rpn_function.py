@@ -112,7 +112,7 @@ class AnchorsGenerator(nn.Module):
         # 计算每个预测特征层上每个滑动窗口的预测目标数
         # fixme: 每个预测特征层滑动窗口预测目标数是一样的
         # return [len(s) * len(a) for s, a in zip(self.sizes, self.aspect_ratios)]
-        return len(self.sizes) * len(self.aspect_ratios)
+        return len(self.sizes) * len(self.aspect_ratios[0])
 
     # For every combination of (a, (g, s), i) in (self.cell_anchors, zip(grid_sizes, strides), 0:2),
     # output g[i] anchors that are s[i] distance apart in direction i, with the same dimensions as a.
