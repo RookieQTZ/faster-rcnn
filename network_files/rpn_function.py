@@ -582,6 +582,11 @@ class RegionProposalNetwork(torch.nn.Module):
                 pred_bbox_deltas[sampled_pos_inds],
                 regression_targets[sampled_pos_inds],
             ) / (sampled_inds.numel())
+        elif loss_fn == "giou":
+            box_loss = det_utils.giou_loss(
+                pred_bbox_deltas[sampled_pos_inds],
+                regression_targets[sampled_pos_inds],
+            ) / (sampled_inds.numel())
 
         # 计算目标预测概率损失
         objectness_loss = F.binary_cross_entropy_with_logits(

@@ -63,6 +63,12 @@ def fastrcnn_loss(class_logits, box_regression, labels, regression_targets, loss
             box_regression[sampled_pos_inds_subset, labels_pos],
             regression_targets[sampled_pos_inds_subset],
         ) / labels.numel()
+    elif loss_fn == "giou":
+        box_loss = det_utils.giou_loss(
+            # 获取指定索引proposal的指定类别box信息
+            box_regression[sampled_pos_inds_subset, labels_pos],
+            regression_targets[sampled_pos_inds_subset],
+        ) / labels.numel()
 
     return classification_loss, box_loss
 

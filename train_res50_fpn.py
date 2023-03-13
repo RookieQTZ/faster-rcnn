@@ -22,7 +22,7 @@ def create_model(num_classes, load_pretrain_weights=True):
                                      norm_layer=torch.nn.BatchNorm2d,
                                      trainable_layers=3)
     # 训练自己数据集时不要修改这里的91，修改的是传入的num_classes参数
-    model = FasterRCNN(backbone=backbone, num_classes=91, loss_fn="iou")
+    model = FasterRCNN(backbone=backbone, num_classes=91, loss_fn="giou")
 
     if load_pretrain_weights:
         # 载入预训练模型权重
