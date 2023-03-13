@@ -412,13 +412,13 @@ def giou_loss(bboxes1, bboxes2):
     area2 = (bboxes2[:, 2] - bboxes2[:, 0]) * (
         bboxes2[:, 3] - bboxes2[:, 1])
 
-    inter_max_xy = torch.min(bboxes1[:, 2:],bboxes2[:, 2:])
+    inter_max_xy = torch.min(bboxes1[:, 2:], bboxes2[:, 2:])
 
-    inter_min_xy = torch.max(bboxes1[:, :2],bboxes2[:, :2])
+    inter_min_xy = torch.max(bboxes1[:, :2], bboxes2[:, :2])
 
-    out_max_xy = torch.max(bboxes1[:, 2:],bboxes2[:, 2:])
+    out_max_xy = torch.max(bboxes1[:, 2:], bboxes2[:, 2:])
 
-    out_min_xy = torch.min(bboxes1[:, :2],bboxes2[:, :2])
+    out_min_xy = torch.min(bboxes1[:, :2], bboxes2[:, :2])
 
     inter = torch.clamp((inter_max_xy - inter_min_xy), min=0)
     inter_area = inter[:, 0] * inter[:, 1]
@@ -428,7 +428,7 @@ def giou_loss(bboxes1, bboxes2):
     closure = outer_area
 
     ious = inter_area / union - (closure - union) / closure
-    ious = torch.clamp(ious,min=-1.0,max = 1.0)
+    ious = torch.clamp(ious, min=-1.0, max=1.0)
     if exchange:
         ious = ious.T
     return torch.sum(1-ious)
@@ -461,35 +461,6 @@ def iou_loss(bboxes1, bboxes2):
     if exchange:
         ious = ious.T
     return torch.sum(1-ious)
-
-
-# def iou_loss(box1, box2):
-#     """
-#     iou loss
-#     :param box1: tensor [batch, w, h, num_anchor, 4], xywh 预测值
-#     :param box2: tensor [batch, w, h, num_anchor, 4], xywh 真实值
-#     :return: tensor [batch, w, h, num_anchor, 1]
-#     """
-#     box1_xy, box1_wh = box1[..., :2], box1[..., 2:4]
-#     box1_wh_half = box1_wh / 2.
-#     box1_mines = box1_xy - box1_wh_half
-#     box1_maxes = box1_xy + box1_wh_half
-#
-#     box2_xy, box2_wh = box2[..., :2], box2[..., 2:4]
-#     box2_wh_half = box2_wh / 2.
-#     box2_mines = box2_xy - box2_wh_half
-#     box2_maxes = box2_xy + box2_wh_half
-#
-#     # 求真实值和预测值所有的iou
-#     intersect_mines = torch.max(box1_mines, box2_mines)
-#     intersect_maxes = torch.min(box1_maxes, box2_maxes)
-#     intersect_wh = torch.max(intersect_maxes-intersect_mines, torch.zeros_like(intersect_maxes))
-#     intersect_area = intersect_wh[..., 0]*intersect_wh[..., 1]
-#     box1_area = box1_wh[..., 0]*box1_wh[..., 1]
-#     box2_area = box2_wh[..., 0]*box2_wh[..., 1]
-#     union_area = box1_area+box2_area-intersect_area
-#     iou = intersect_area / torch.clamp(union_area, min=1e-6)
-#     return iou.sum()
 
 
 def smooth_l1_loss(input, target, beta: float = 1. / 9, size_average: bool = True):

@@ -8,14 +8,15 @@ from . import det_utils
 from . import boxes as box_ops
 
 
-def fastrcnn_loss(class_logits, box_regression, labels, regression_targets, loss_fn):
-    # type: (Tensor, Tensor, List[Tensor], List[Tensor], str) -> Tuple[Tensor, Tensor]
+def fastrcnn_loss(class_logits, box_regression, bbox, labels, regression_targets, matched_gt_box, loss_fn):
+    # type: (Tensor, Tensor, Tensor, List[Tensor], List[Tensor], List[Tensor], str) -> Tuple[Tensor, Tensor]
     """
     Computes the loss for Faster R-CNN.
 
     Arguments:
         class_logits : 预测类别概率信息，shape=[num_anchors, num_classes]
         box_regression : 预测边目标界框回归信息
+        bbox
         labels : 真实类别信息
         regression_targets : 真实目标边界框信息
         loss_fn : l1 iou giou diou ciou
@@ -28,6 +29,7 @@ def fastrcnn_loss(class_logits, box_regression, labels, regression_targets, loss
     labels = torch.cat(labels, dim=0)
     # labels = torch.cat(labels, dim=0).reshape()
     regression_targets = torch.cat(regression_targets, dim=0)
+    matched_gt_box = torch.cat(matched_gt_box, dim=0)
 
     # 计算类别损失信息，損失太大？？？？？？正负样本不均衡，负样本太大
     # classification_loss = F.binary_cross_entropy_with_logits(class_logits[:, 1], labels.float())
@@ -60,14 +62,14 @@ def fastrcnn_loss(class_logits, box_regression, labels, regression_targets, loss
     elif loss_fn == "iou":
         box_loss = det_utils.iou_loss(
             # 获取指定索引proposal的指定类别box信息
-            box_regression[sampled_pos_inds_subset, labels_pos],
-            regression_targets[sampled_pos_inds_subset],
+            bbox[sampled_pos_inds_subset, labels_pos],
+            matched_gt_box[sampled_pos_inds_subset],
         ) / labels.numel()
     elif loss_fn == "giou":
         box_loss = det_utils.giou_loss(
             # 获取指定索引proposal的指定类别box信息
-            box_regression[sampled_pos_inds_subset, labels_pos],
-            regression_targets[sampled_pos_inds_subset],
+            bbox[sampled_pos_inds_subset, labels_pos],
+            matched_gt_box[sampled_pos_inds_subset],
         ) / labels.numel()
 
     return classification_loss, box_loss
@@ -212,7 +214,7 @@ class RoIHeads(torch.nn.Module):
                                 proposals,  # type: List[Tensor]
                                 targets     # type: Optional[List[Dict[str, Tensor]]]
                                 ):
-        # type: (...) -> Tuple[List[Tensor], List[Tensor], List[Tensor]]
+        # type: (...) -> Tuple[List[Tensor], List[Tensor], List[Tensor], List[Tensor]]
         """
         划分正负样本，统计对应gt的标签以及边界框回归信息
         list元素个数为batch_size
@@ -268,7 +270,7 @@ class RoIHeads(torch.nn.Module):
 
         # 根据gt和proposal计算边框回归参数（针对gt的）
         regression_targets = self.box_coder.encode(matched_gt_boxes, proposals)
-        return proposals, labels, regression_targets
+        return proposals, labels, regression_targets, matched_gt_boxes
 
     def postprocess_detections(self,
                                class_logits,    # type: Tensor
@@ -390,7 +392,7 @@ class RoIHeads(torch.nn.Module):
         if self.training:
             # 划分正负样本，统计对应gt的标签以及边界框回归信息
             # lables出现了2？？
-            proposals, labels, regression_targets = self.select_training_samples(proposals, targets)
+            proposals, labels, regression_targets, matched_gt_box = self.select_training_samples(proposals, targets)
         else:
             labels = None
             regression_targets = None
@@ -403,15 +405,17 @@ class RoIHeads(torch.nn.Module):
         # box_features_shape: [num_proposals, representation_size]
         box_features = self.box_head(box_features)
 
-        # 接着分别预测目标类别和边界框回归参数
+        # 接着分别预测目标类别和边界框回归参数（背景、前景）
         class_logits, box_regression = self.box_predictor(box_features)
 
         result = torch.jit.annotate(List[Dict[str, torch.Tensor]], [])
         losses = {}
         if self.training:
-            assert labels is not None and regression_targets is not None
+            assert labels is not None and regression_targets is not None and matched_gt_box is not None
+            # 将预测值参数应用到proposal上得到最终预测bbox坐标
+            bbox = self.box_coder.decode(box_regression.detach(), proposals)
             loss_classifier, loss_box_reg = fastrcnn_loss(
-                class_logits, box_regression, labels, regression_targets, loss_fn)
+                class_logits, box_regression, bbox, labels, regression_targets, matched_gt_box,  loss_fn)
             losses = {
                 "loss_classifier": loss_classifier,
                 "loss_box_reg": loss_box_reg

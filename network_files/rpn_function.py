@@ -538,8 +538,8 @@ class RegionProposalNetwork(torch.nn.Module):
             final_scores.append(scores)
         return final_boxes, final_scores
 
-    def compute_loss(self, objectness, pred_bbox_deltas, labels, regression_targets, loss_fn):
-        # type: (Tensor, Tensor, List[Tensor], List[Tensor], str) -> Tuple[Tensor, Tensor]
+    def compute_loss(self, objectness, pred_bbox_deltas, proposals, labels, regression_targets, gt_boxes, loss_fn):
+        # type: (Tensor, Tensor, List[Tensor], List[Tensor], List[Tensor], List[Tensor], str) -> Tuple[Tensor, Tensor]
         """
         计算RPN损失，包括类别损失（前景与背景），bbox rgressieon损失
         Arguments:
@@ -579,13 +579,13 @@ class RegionProposalNetwork(torch.nn.Module):
             ) / (sampled_inds.numel())
         elif loss_fn == "iou":
             box_loss = det_utils.iou_loss(
-                pred_bbox_deltas[sampled_pos_inds],
-                regression_targets[sampled_pos_inds],
+                proposals[sampled_pos_inds],
+                gt_boxes[sampled_pos_inds],
             ) / (sampled_inds.numel())
         elif loss_fn == "giou":
             box_loss = det_utils.giou_loss(
-                pred_bbox_deltas[sampled_pos_inds],
-                regression_targets[sampled_pos_inds],
+                proposals[sampled_pos_inds],
+                gt_boxes[sampled_pos_inds],
             ) / (sampled_inds.numel())
 
         # 计算目标预测概率损失
@@ -659,8 +659,10 @@ class RegionProposalNetwork(torch.nn.Module):
             labels, matched_gt_boxes = self.assign_targets_to_anchors(anchors, targets)
             # 结合anchors以及对应的gt，计算regression参数
             regression_targets = self.box_coder.encode(matched_gt_boxes, anchors)
+            matched_gt_boxes = torch.cat(matched_gt_boxes)
+            proposals = proposals.view(-1, 4)
             loss_objectness, loss_rpn_box_reg = self.compute_loss(
-                objectness, pred_bbox_deltas, labels, regression_targets, loss_fn
+                objectness, pred_bbox_deltas, proposals, labels, regression_targets, matched_gt_boxes, loss_fn
             )
             losses = {
                 "loss_objectness": loss_objectness,
