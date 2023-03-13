@@ -289,7 +289,7 @@ class FasterRCNN(FasterRCNNBase):
         # todo：anchors比例
         if rpn_anchor_generator is None:
             anchor_sizes = ((32,), (64,), (128,), (256,))  # 32 512
-            aspect_ratios = ((0.5, 1.0, 2.0),) * len(anchor_sizes)
+            aspect_ratios = ((0.2, 0.33, 0.5, 1.0, 2.0, 3.0, 5.0),) * len(anchor_sizes)
             rpn_anchor_generator = AnchorsGenerator(
                 anchor_sizes, aspect_ratios
             )
