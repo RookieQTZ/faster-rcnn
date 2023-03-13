@@ -538,15 +538,16 @@ class RegionProposalNetwork(torch.nn.Module):
             final_scores.append(scores)
         return final_boxes, final_scores
 
-    def compute_loss(self, objectness, pred_bbox_deltas, labels, regression_targets):
-        # type: (Tensor, Tensor, List[Tensor], List[Tensor]) -> Tuple[Tensor, Tensor]
+    def compute_loss(self, objectness, pred_bbox_deltas, labels, regression_targets, loss_fn):
+        # type: (Tensor, Tensor, List[Tensor], List[Tensor], str) -> Tuple[Tensor, Tensor]
         """
-        计算RPN损失，包括类别损失（前景与背景），bbox regression损失
+        计算RPN损失，包括类别损失（前景与背景），bbox rgressieon损失
         Arguments:
             objectness (Tensor)：预测的前景概率
             pred_bbox_deltas (Tensor)：预测的bbox regression
             labels (List[Tensor])：真实的标签 1, 0, -1（batch中每一张图片的labels对应List的一个元素中）
             regression_targets (List[Tensor])：真实的bbox regression
+            loss_fn (str)：l1 iou giou diou ciou
 
         Returns:
             objectness_loss (Tensor) : 类别损失
@@ -568,12 +569,19 @@ class RegionProposalNetwork(torch.nn.Module):
         regression_targets = torch.cat(regression_targets, dim=0)
 
         # 计算边界框回归损失
-        box_loss = det_utils.smooth_l1_loss(
-            pred_bbox_deltas[sampled_pos_inds],
-            regression_targets[sampled_pos_inds],
-            beta=1 / 9,
-            size_average=False,
-        ) / (sampled_inds.numel())
+        # todo: rpn loss
+        if loss_fn == "l1":
+            box_loss = det_utils.smooth_l1_loss(
+                pred_bbox_deltas[sampled_pos_inds],
+                regression_targets[sampled_pos_inds],
+                beta=1 / 9,
+                size_average=False,
+            ) / (sampled_inds.numel())
+        elif loss_fn == "iou":
+            box_loss = det_utils.iou_loss(
+                pred_bbox_deltas[sampled_pos_inds],
+                regression_targets[sampled_pos_inds],
+            ) / (sampled_inds.numel())
 
         # 计算目标预测概率损失
         objectness_loss = F.binary_cross_entropy_with_logits(
@@ -585,6 +593,7 @@ class RegionProposalNetwork(torch.nn.Module):
     def forward(self,
                 images,        # type: ImageList
                 features,      # type: Dict[str, Tensor]
+                loss_fn,      # type: str
                 targets=None   # type: Optional[List[Dict[str, Tensor]]]
                 ):
         # type: (...) -> Tuple[List[Tensor], Dict[str, Tensor]]
@@ -594,6 +603,7 @@ class RegionProposalNetwork(torch.nn.Module):
             features (Dict[Tensor]): features computed from the images that are
                 used for computing the predictions. Each tensor in the list
                 correspond to different feature levels
+            loss_fn (str): l1 iou giou diou ciou
             targets (List[Dict[Tensor]): ground-truth boxes present in the image (optional).
                 If provided, each element in the dict should contain a field `boxes`,
                 with the locations of the ground-truth boxes.
@@ -645,7 +655,7 @@ class RegionProposalNetwork(torch.nn.Module):
             # 结合anchors以及对应的gt，计算regression参数
             regression_targets = self.box_coder.encode(matched_gt_boxes, anchors)
             loss_objectness, loss_rpn_box_reg = self.compute_loss(
-                objectness, pred_bbox_deltas, labels, regression_targets
+                objectness, pred_bbox_deltas, labels, regression_targets, loss_fn
             )
             losses = {
                 "loss_objectness": loss_objectness,

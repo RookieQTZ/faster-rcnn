@@ -8,8 +8,8 @@ from . import det_utils
 from . import boxes as box_ops
 
 
-def fastrcnn_loss(class_logits, box_regression, labels, regression_targets):
-    # type: (Tensor, Tensor, List[Tensor], List[Tensor]) -> Tuple[Tensor, Tensor]
+def fastrcnn_loss(class_logits, box_regression, labels, regression_targets, loss_fn):
+    # type: (Tensor, Tensor, List[Tensor], List[Tensor], str) -> Tuple[Tensor, Tensor]
     """
     Computes the loss for Faster R-CNN.
 
@@ -18,6 +18,7 @@ def fastrcnn_loss(class_logits, box_regression, labels, regression_targets):
         box_regression : 预测边目标界框回归信息
         labels : 真实类别信息
         regression_targets : 真实目标边界框信息
+        loss_fn : l1 iou giou diou ciou
 
     Returns:
         classification_loss (Tensor)
@@ -47,13 +48,21 @@ def fastrcnn_loss(class_logits, box_regression, labels, regression_targets):
     box_regression = box_regression.reshape(N, -1, 4)
 
     # 计算边界框损失信息
-    box_loss = det_utils.smooth_l1_loss(
-        # 获取指定索引proposal的指定类别box信息
-        box_regression[sampled_pos_inds_subset, labels_pos],
-        regression_targets[sampled_pos_inds_subset],
-        beta=1 / 9,
-        size_average=False,
-    ) / labels.numel()
+    # todo: faster rcnn loss
+    if loss_fn == "l1":
+        box_loss = det_utils.smooth_l1_loss(
+            # 获取指定索引proposal的指定类别box信息
+            box_regression[sampled_pos_inds_subset, labels_pos],
+            regression_targets[sampled_pos_inds_subset],
+            beta=1 / 9,
+            size_average=False,
+        ) / labels.numel()
+    elif loss_fn == "iou":
+        box_loss = det_utils.iou_loss(
+            # 获取指定索引proposal的指定类别box信息
+            box_regression[sampled_pos_inds_subset, labels_pos],
+            regression_targets[sampled_pos_inds_subset],
+        ) / labels.numel()
 
     return classification_loss, box_loss
 
@@ -352,6 +361,7 @@ class RoIHeads(torch.nn.Module):
                 features,       # type: Dict[str, Tensor]
                 proposals,      # type: List[Tensor]
                 image_shapes,   # type: List[Tuple[int, int]]
+                loss_fn,        # type: str
                 targets=None    # type: Optional[List[Dict[str, Tensor]]]
                 ):
         # type: (...) -> Tuple[List[Dict[str, Tensor]], Dict[str, Tensor]]
@@ -360,6 +370,7 @@ class RoIHeads(torch.nn.Module):
             features (List[Tensor])
             proposals (List[Tensor[N, 4]])
             image_shapes (List[Tuple[H, W]])
+            loss_fn (str)
             targets (List[Dict])
         """
 
@@ -394,7 +405,7 @@ class RoIHeads(torch.nn.Module):
         if self.training:
             assert labels is not None and regression_targets is not None
             loss_classifier, loss_box_reg = fastrcnn_loss(
-                class_logits, box_regression, labels, regression_targets)
+                class_logits, box_regression, labels, regression_targets, loss_fn)
             losses = {
                 "loss_classifier": loss_classifier,
                 "loss_box_reg": loss_box_reg

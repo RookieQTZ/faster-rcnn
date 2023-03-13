@@ -25,12 +25,13 @@ class FasterRCNNBase(nn.Module):
             the model
     """
 
-    def __init__(self, backbone, rpn, roi_heads, transform):
+    def __init__(self, backbone, rpn, roi_heads, transform, loss_fn):
         super(FasterRCNNBase, self).__init__()
         self.transform = transform
         self.backbone = backbone
         self.rpn = rpn
         self.roi_heads = roi_heads
+        self.loss_fn = loss_fn
         # used only on torchscript mode
         self._has_warned = False
 
@@ -89,10 +90,10 @@ class FasterRCNNBase(nn.Module):
         # 将特征层以及标注target信息传入rpn中
         # proposals: List[Tensor], Tensor_shape: [num_proposals, 4],
         # 每个proposals是绝对坐标，且为(x1, y1, x2, y2)格式
-        proposals, proposal_losses = self.rpn(images, features, targets)
+        proposals, proposal_losses = self.rpn(images, features, self.loss_fn, targets)
 
         # 将rpn生成的数据以及标注target信息传入fast rcnn后半部分
-        detections, detector_losses = self.roi_heads(features, proposals, images.image_sizes, targets)
+        detections, detector_losses = self.roi_heads(features, proposals, images.image_sizes, self.loss_fn, targets)
 
         # 对网络的预测结果进行后处理（主要将bboxes还原到原图像尺度上）
         detections = self.transform.postprocess(detections, images.image_sizes, original_image_sizes)
@@ -262,7 +263,9 @@ class FasterRCNN(FasterRCNNBase):
                  box_score_thresh=0.05, box_nms_thresh=0.5, box_detections_per_img=100,
                  box_fg_iou_thresh=0.5, box_bg_iou_thresh=0.5,   # fast rcnn计算误差时，采集正负样本设置的阈值
                  box_batch_size_per_image=512, box_positive_fraction=0.25,  # fast rcnn计算误差时采样的样本数，以及正样本占所有样本的比例
-                 bbox_reg_weights=None):
+                 bbox_reg_weights=None,
+                 # 损失函数
+                 loss_fn="l1"):
         if not hasattr(backbone, "out_channels"):
             raise ValueError(
                 "backbone should contain an attribute out_channels"
@@ -353,4 +356,4 @@ class FasterRCNN(FasterRCNNBase):
         # 对数据进行标准化，缩放，打包成batch等处理部分
         transform = GeneralizedRCNNTransform(min_size, max_size, image_mean, image_std)
 
-        super(FasterRCNN, self).__init__(backbone, rpn, roi_heads, transform)
+        super(FasterRCNN, self).__init__(backbone, rpn, roi_heads, transform, loss_fn)
