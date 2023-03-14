@@ -275,8 +275,9 @@ class RoIHeads(torch.nn.Module):
             # 移除低概率目标，self.scores_thresh=0.05
             # gt: Computes input > other element-wise.
             # inds = torch.nonzero(torch.gt(scores, self.score_thresh)).squeeze(1)
-            inds = torch.where(torch.gt(scores, self.score_thresh))[0]
-            boxes, scores, labels = boxes[inds], scores[inds], labels[inds]
+            # fixme：不移除低概率目标
+            # inds = torch.where(torch.gt(scores, self.score_thresh))[0]
+            # boxes, scores, labels = boxes[inds], scores[inds], labels[inds]
 
             # remove empty boxes
             # 移除小目标
@@ -392,13 +393,17 @@ class RoIHeads(torch.nn.Module):
                 assert t["boxes"].dtype in floating_point_types, "target boxes must of float type"
                 assert t["labels"].dtype == torch.int64, "target labels must of int64 type"
 
-        if self.training:
-            # 划分正负样本，统计对应gt的标签以及边界框回归信息
-            # lables出现了2？？
-            proposals, labels, regression_targets, matched_gt_box = self.select_training_samples(proposals, targets)
-        else:
-            labels = None
-            regression_targets = None
+        # if self.training:
+        #     # 划分正负样本，统计对应gt的标签以及边界框回归信息
+        #     # lables出现了2？？
+        #     proposals, labels, regression_targets, matched_gt_box = self.select_training_samples(proposals, targets)
+        # else:
+        #     labels = None
+        #     regression_targets = None
+
+        # 划分正负样本，统计对应gt的标签以及边界框回归信息
+        # lables出现了2？？
+        proposals, labels, regression_targets, matched_gt_box = self.select_training_samples(proposals, targets)
 
         # 将采集样本通过Multi-scale RoIAlign pooling层
         # box_features_shape: [num_proposals, channel, height, width]
@@ -413,14 +418,25 @@ class RoIHeads(torch.nn.Module):
 
         result = torch.jit.annotate(List[Dict[str, torch.Tensor]], [])
         losses = {}
+
+        assert labels is not None and regression_targets is not None and matched_gt_box is not None
+        # 没有把proposals根据预测的回归参数算出回归结果
+        loss_classifier, loss_box_reg = self.fastrcnn_loss(
+            class_logits, box_regression, proposals, labels, regression_targets, matched_gt_box, loss_fn)
+        losses = {
+            "loss_classifier": loss_classifier,
+            "loss_box_reg": loss_box_reg
+        }
         if self.training:
-            assert labels is not None and regression_targets is not None and matched_gt_box is not None
-            loss_classifier, loss_box_reg = self.fastrcnn_loss(
-                class_logits, box_regression, proposals, labels, regression_targets, matched_gt_box,  loss_fn)
-            losses = {
-                "loss_classifier": loss_classifier,
-                "loss_box_reg": loss_box_reg
-            }
+            pass
+            # assert labels is not None and regression_targets is not None and matched_gt_box is not None
+            # # 没有把proposals根据预测的回归参数算出回归结果
+            # loss_classifier, loss_box_reg = self.fastrcnn_loss(
+            #     class_logits, box_regression, proposals, labels, regression_targets, matched_gt_box,  loss_fn)
+            # losses = {
+            #     "loss_classifier": loss_classifier,
+            #     "loss_box_reg": loss_box_reg
+            # }
         else:
             boxes, scores, labels = self.postprocess_detections(class_logits, box_regression, proposals, image_shapes)
             num_images = len(boxes)

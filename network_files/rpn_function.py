@@ -656,18 +656,33 @@ class RegionProposalNetwork(torch.nn.Module):
         boxes, scores = self.filter_proposals(proposals, objectness, images.image_sizes, num_anchors_per_level)
 
         losses = {}
+
+        assert targets is not None
+        # 计算每个anchors最匹配的gt，并将anchors进行分类，前景，背景以及废弃的anchors
+        labels, matched_gt_boxes = self.assign_targets_to_anchors(anchors, targets)
+        # 结合anchors以及对应的gt，计算regression参数
+        regression_targets = self.box_coder.encode(matched_gt_boxes, anchors)
+        proposals = proposals.view(-1, 4)
+        loss_objectness, loss_rpn_box_reg = self.compute_loss(
+            objectness, pred_bbox_deltas, proposals, labels, regression_targets, matched_gt_boxes, loss_fn
+        )
+        losses = {
+            "loss_objectness": loss_objectness,
+            "loss_rpn_box_reg": loss_rpn_box_reg
+        }
         if self.training:
-            assert targets is not None
-            # 计算每个anchors最匹配的gt，并将anchors进行分类，前景，背景以及废弃的anchors
-            labels, matched_gt_boxes = self.assign_targets_to_anchors(anchors, targets)
-            # 结合anchors以及对应的gt，计算regression参数
-            regression_targets = self.box_coder.encode(matched_gt_boxes, anchors)
-            proposals = proposals.view(-1, 4)
-            loss_objectness, loss_rpn_box_reg = self.compute_loss(
-                objectness, pred_bbox_deltas, proposals, labels, regression_targets, matched_gt_boxes, loss_fn
-            )
-            losses = {
-                "loss_objectness": loss_objectness,
-                "loss_rpn_box_reg": loss_rpn_box_reg
-            }
+            pass
+            # assert targets is not None
+            # # 计算每个anchors最匹配的gt，并将anchors进行分类，前景，背景以及废弃的anchors
+            # labels, matched_gt_boxes = self.assign_targets_to_anchors(anchors, targets)
+            # # 结合anchors以及对应的gt，计算regression参数
+            # regression_targets = self.box_coder.encode(matched_gt_boxes, anchors)
+            # proposals = proposals.view(-1, 4)
+            # loss_objectness, loss_rpn_box_reg = self.compute_loss(
+            #     objectness, pred_bbox_deltas, proposals, labels, regression_targets, matched_gt_boxes, loss_fn
+            # )
+            # losses = {
+            #     "loss_objectness": loss_objectness,
+            #     "loss_rpn_box_reg": loss_rpn_box_reg
+            # }
         return boxes, losses

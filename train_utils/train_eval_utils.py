@@ -89,13 +89,14 @@ def evaluate(model, data_loader, epoch, last_epoch, viz, device):
 
     for images, targets in metric_logger.log_every(data_loader, 100, header):
         image = list(imgs[0].to(device) for imgs in images)
+        targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
 
         # 当使用CPU时，跳过GPU相关指令
         if device != torch.device("cpu"):
             torch.cuda.synchronize(device)
 
         model_time = time.time()
-        outputs = model(image)
+        outputs, loss = model(image, targets)
 
         outputs = [{k: v.to(cpu_device) for k, v in t.items()} for t in outputs]
         model_time = time.time() - model_time
