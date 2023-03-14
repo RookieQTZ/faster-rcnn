@@ -545,8 +545,10 @@ class RegionProposalNetwork(torch.nn.Module):
         Arguments:
             objectness (Tensor)：预测的前景概率
             pred_bbox_deltas (Tensor)：预测的bbox regression
+            proposals
             labels (List[Tensor])：真实的标签 1, 0, -1（batch中每一张图片的labels对应List的一个元素中）
             regression_targets (List[Tensor])：真实的bbox regression
+            gt_boxes
             loss_fn (str)：l1 iou giou diou ciou
 
         Returns:
@@ -567,6 +569,7 @@ class RegionProposalNetwork(torch.nn.Module):
 
         labels = torch.cat(labels, dim=0)
         regression_targets = torch.cat(regression_targets, dim=0)
+        gt_boxes = torch.cat(gt_boxes, dim=0)
 
         # 计算边界框回归损失
         # todo: rpn loss
@@ -659,7 +662,6 @@ class RegionProposalNetwork(torch.nn.Module):
             labels, matched_gt_boxes = self.assign_targets_to_anchors(anchors, targets)
             # 结合anchors以及对应的gt，计算regression参数
             regression_targets = self.box_coder.encode(matched_gt_boxes, anchors)
-            matched_gt_boxes = torch.cat(matched_gt_boxes)
             proposals = proposals.view(-1, 4)
             loss_objectness, loss_rpn_box_reg = self.compute_loss(
                 objectness, pred_bbox_deltas, proposals, labels, regression_targets, matched_gt_boxes, loss_fn

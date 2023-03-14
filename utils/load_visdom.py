@@ -1,5 +1,4 @@
 from visdom import Visdom
-import numpy as np
 
 
 visdom_file = "../data/visdom.log"
