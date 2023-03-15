@@ -592,7 +592,8 @@ class RegionProposalNetwork(torch.nn.Module):
             ) / (sampled_inds.numel())
 
         # 计算目标预测概率损失
-        objectness_loss = F.binary_cross_entropy_with_logits(
+        # fixme： 给一个较大的损失权重
+        objectness_loss = 3. * F.binary_cross_entropy_with_logits(
             objectness[sampled_inds], labels[sampled_inds]
         )
 

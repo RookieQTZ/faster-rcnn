@@ -276,8 +276,8 @@ class RoIHeads(torch.nn.Module):
             # gt: Computes input > other element-wise.
             # inds = torch.nonzero(torch.gt(scores, self.score_thresh)).squeeze(1)
             # fixme：不移除低概率目标
-            # inds = torch.where(torch.gt(scores, self.score_thresh))[0]
-            # boxes, scores, labels = boxes[inds], scores[inds], labels[inds]
+            inds = torch.where(torch.gt(scores, self.score_thresh))[0]
+            boxes, scores, labels = boxes[inds], scores[inds], labels[inds]
 
             # remove empty boxes
             # 移除小目标
@@ -325,7 +325,8 @@ class RoIHeads(torch.nn.Module):
 
         # 计算类别损失信息，損失太大
         # classification_loss = F.binary_cross_entropy_with_logits(class_logits[:, 1], labels.float())
-        classification_loss = F.cross_entropy(class_logits, labels)
+        # fixme：给一个较大的损失权重
+        classification_loss = 3. * F.cross_entropy(class_logits, labels)
 
         # get indices that correspond to the regression targets for
         # the corresponding ground truth labels, to be used with
@@ -420,7 +421,6 @@ class RoIHeads(torch.nn.Module):
         losses = {}
 
         assert labels is not None and regression_targets is not None and matched_gt_box is not None
-        # 没有把proposals根据预测的回归参数算出回归结果
         loss_classifier, loss_box_reg = self.fastrcnn_loss(
             class_logits, box_regression, proposals, labels, regression_targets, matched_gt_box, loss_fn)
         losses = {
