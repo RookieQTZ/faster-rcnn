@@ -367,6 +367,12 @@ class RoIHeads(torch.nn.Module):
                 bbox[sampled_pos_inds_subset, labels_pos],
                 matched_gt_box[sampled_pos_inds_subset],
             ) / labels.numel()
+        elif loss_fn == "diou":
+            box_loss = det_utils.diou_loss(
+                # 获取指定索引proposal的指定类别box信息
+                bbox[sampled_pos_inds_subset, labels_pos],
+                matched_gt_box[sampled_pos_inds_subset],
+            ) / labels.numel()
 
         return classification_loss, box_loss
 

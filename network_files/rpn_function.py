@@ -590,6 +590,11 @@ class RegionProposalNetwork(torch.nn.Module):
                 proposals[sampled_pos_inds],
                 gt_boxes[sampled_pos_inds],
             ) / (sampled_inds.numel())
+        elif loss_fn == "diou":
+            box_loss = det_utils.diou_loss(
+                proposals[sampled_pos_inds],
+                gt_boxes[sampled_pos_inds],
+            ) / (sampled_inds.numel())
 
         # 计算目标预测概率损失
         # fixme： 给一个较大的损失权重
