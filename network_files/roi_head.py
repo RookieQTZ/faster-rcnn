@@ -326,7 +326,7 @@ class RoIHeads(torch.nn.Module):
         # 计算类别损失信息，損失太大
         # classification_loss = F.binary_cross_entropy_with_logits(class_logits[:, 1], labels.float())
         # fixme：给一个较大的损失权重
-        classification_loss = 3. * F.cross_entropy(class_logits, labels)
+        classification_loss = F.cross_entropy(class_logits, labels)
 
         # get indices that correspond to the regression targets for
         # the corresponding ground truth labels, to be used with

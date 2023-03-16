@@ -12,7 +12,7 @@ import train_utils.distributed_utils as utils
 import plot_curve
 
 
-def train_one_epoch(model, optimizer, data_loader, device, epoch,
+def train_one_epoch(model, optimizer, data_loader, weighted_loss_func, device, epoch,
                     print_freq=50, warmup=False, scaler=None):
     model.train()
     metric_logger = utils.MetricLogger(delimiter="  ")
@@ -38,7 +38,8 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch,
         with torch.cuda.amp.autocast(enabled=scaler is not None):
             loss_dict = model(images, targets)
             # 为分类损失多加点损失权重？
-            losses = sum(loss for loss in loss_dict.values())
+            # losses = sum(loss for loss in loss_dict.values())
+            losses = weighted_loss_func(*[loss for loss in loss_dict.values()])
 
         # reduce losses over all GPUs for logging purpose
         loss_dict_reduced = utils.reduce_dict(loss_dict)

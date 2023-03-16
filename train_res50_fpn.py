@@ -9,6 +9,7 @@ from backbone import resnet50_fpn_backbone
 from my_dataset_coco import CocoDetection
 from train_utils import GroupedBatchSampler, create_aspect_ratio_groups
 from train_utils import train_eval_utils as utils
+from network_files import multitask_loss
 import plot_curve
 
 
@@ -112,7 +113,14 @@ def main(args):
     model.to(device)
 
     # define optimizer
-    params = [p for p in model.parameters() if p.requires_grad]
+    # params = [p for p in model.parameters() if p.requires_grad]
+    # optimizer = torch.optim.SGD(params,
+    #                             lr=args.lr,
+    #                             momentum=args.momentum,
+    #                             weight_decay=args.weight_decay)
+    weighted_loss_func = multitask_loss.UncertaintyLoss(4)
+    weighted_loss_func.to(device)
+    params = filter(lambda x: x.requires_grad, list(model.parameters()) + list(weighted_loss_func.parameters()))
     optimizer = torch.optim.SGD(params,
                                 lr=args.lr,
                                 momentum=args.momentum,
@@ -144,7 +152,7 @@ def main(args):
 
     for epoch in range(args.start_epoch, args.epochs):
         # train for one epoch, printing every 10 iterations
-        mean_loss, loss_dict, lr = utils.train_one_epoch(model, optimizer, train_data_loader,
+        mean_loss, loss_dict, lr = utils.train_one_epoch(model, optimizer, train_data_loader, weighted_loss_func,
                                                          device=device, epoch=epoch,
                                                          print_freq=50, warmup=True,
                                                          scaler=scaler)
