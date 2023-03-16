@@ -13,12 +13,12 @@ class UncertaintyLoss(nn.Module):
         self.v_num = v_num
 
     def forward(self, *input):
-        print("sigma: " + str(self.sigma))
+        # print("sigma: " + str([sigma.item() for sigma in self.sigma]))
         loss = 0
         for i in range(self.v_num):
             loss += input[i] / (2 * self.sigma[i] ** 2)
         loss += torch.log(self.sigma.pow(2).prod())
-        return loss
+        return loss, str([sigma.item() for sigma in self.sigma])
 
 # if __name__ == '__main__':
 #     weighted_loss_func = UncertaintyLoss(2)

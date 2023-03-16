@@ -39,7 +39,11 @@ def train_one_epoch(model, optimizer, data_loader, weighted_loss_func, device, e
             loss_dict = model(images, targets)
             # 为分类损失多加点损失权重？
             # losses = sum(loss for loss in loss_dict.values())
-            losses = weighted_loss_func(*[loss for loss in loss_dict.values()])
+            losses, sigma = weighted_loss_func(*[loss for loss in loss_dict.values()])
+
+        # 每个epoch开始时打印一次sigma
+        if i == 0:
+            print("Epoch: [" + str(epoch) + "]  sigma: " + sigma)
 
         # reduce losses over all GPUs for logging purpose
         loss_dict_reduced = utils.reduce_dict(loss_dict)
