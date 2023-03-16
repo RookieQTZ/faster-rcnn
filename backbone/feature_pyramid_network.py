@@ -205,11 +205,15 @@ class BackboneWithFPN(nn.Module):
 
     def __init__(self,
                  backbone: nn.Module,
+                 cbam: bool,
                  return_layers=None,
                  in_channels_list=None,
                  out_channels=256,
                  extra_blocks=None,
-                 re_getter=True):
+                 re_getter=True,
+                 spatial_attention=None,
+                 channel_attention=None,
+                 ):
         super().__init__()
 
         if extra_blocks is None:
@@ -221,6 +225,18 @@ class BackboneWithFPN(nn.Module):
         else:
             self.body = backbone
 
+        if cbam:
+            if channel_attention is None:
+                self.channel_blocks = nn.ModuleList()
+                for in_channels in in_channels_list:
+                    if in_channels == 0:
+                        continue
+                    channel_block_module = ChannelAttention(in_channels)
+                    self.channel_blocks.append(channel_block_module)
+
+            if spatial_attention is None:
+                self.spatial_attention = SpatialAttention()
+
         self.fpn = FeaturePyramidNetwork(
             in_channels_list=in_channels_list,
             out_channels=out_channels,
@@ -229,7 +245,143 @@ class BackboneWithFPN(nn.Module):
 
         self.out_channels = out_channels
 
+    def get_result_from_channel_blocks(self, x: Tensor, idx: int) -> Tensor:
+        """
+        This is equivalent to self.inner_blocks[idx](x),
+        but torchscript doesn't support this yet
+        """
+        num_blocks = len(self.channel_blocks)
+        if idx < 0:
+            idx += num_blocks
+        i = 0
+        out = x
+        for module in self.channel_blocks:
+            if i == idx:
+                out = module(x)
+            i += 1
+        return out
+
+    def get_channel_result(self, x):
+        # unpack OrderedDict into two lists for easier handling
+        names = list(x.keys())
+        x = list(x.values())
+
+        # result中保存着每个预测特征层
+        results = []
+
+        for idx in range(len(x) - 1, -1, -1):
+            channel_result = self.get_result_from_channel_blocks(x[idx], idx)
+            results.insert(0, channel_result)
+
+        # make it back an OrderedDict
+        out = OrderedDict([(k, v) for k, v in zip(names, results)])
+        return out
+
+    def get_ul_pool_result(self, ul_x, h, w):
+        ul_poolings = UlPoolings(h, w)
+        return_layers = {'pool1': '0', 'pool2': '1', 'pool3': '2', 'pool4': '3'}
+        ul_body = IntermediateLayerGetter(ul_poolings, return_layers=return_layers)
+        ul_x = ul_body(ul_x)
+        return ul_x
+
+    def get_attention_result(self, x):
+        # unpack OrderedDict into two lists for easier handling
+        names = list(x.keys())
+        x = list(x.values())
+
+        # result中保存着每个预测特征层
+        results = []
+
+        for idx in range(len(x) - 1, -1, -1):
+            results.insert(0, self.spatial_attention(x[idx]))
+
+        # make it back an OrderedDict
+        out = OrderedDict([(k, v) for k, v in zip(names, results)])
+
+        return out
+
     def forward(self, x):
+        # body: orderDict
         x = self.body(x)
+
+        # 通道注意力机制
+        x = self.get_channel_result(x)
+
+        # 此时，x为resnet50 layer1 layer2 layer3 layer4的输出
+        # h = x['0'].shape[2]
+        # w = x['0'].shape[3]
+        # ul_x = self.get_ul_pool_result(ul_x, h, w)
+
+        # todo: 将x与ul_x进行注意力增强
+        x = self.get_attention_result(x)
+
         x = self.fpn(x)
         return x
+
+
+class UlPoolings(nn.Module):
+    '''
+    3, h, w
+    conv(3, 1, size=1, strides=1)
+    1, h, w
+    pooling(size=k, strides=s)
+    '''
+    def __init__(self, h, w):
+        super().__init__()
+        self.pool1 = nn.AdaptiveAvgPool2d((h, w))
+        self.pool2 = nn.AdaptiveAvgPool2d((h // 2, w // 2))
+        self.pool3 = nn.AdaptiveAvgPool2d((h // 4, w // 4))
+        self.pool4 = nn.AdaptiveAvgPool2d((h // 8, w // 8))
+
+    def forward(self, x):
+        x = self.pool1(x)
+        x = self.pool2(x)
+        x = self.pool3(x)
+        x = self.pool4(x)
+
+        return x
+
+
+# 通道注意力机制
+class ChannelAttention(nn.Module):
+    def __init__(self, in_planes, ratio=8):
+        super(ChannelAttention, self).__init__()
+        self.avg_pool = nn.AdaptiveAvgPool2d(1)
+        self.max_pool = nn.AdaptiveMaxPool2d(1)
+
+        # 利用1x1卷积代替全连接
+        self.fc1   = nn.Conv2d(in_planes, in_planes // ratio, 1, bias=False)
+        self.relu1 = nn.ReLU()
+        self.fc2   = nn.Conv2d(in_planes // ratio, in_planes, 1, bias=False)
+
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, x):
+        avg_out = self.fc2(self.relu1(self.fc1(self.avg_pool(x))))
+        max_out = self.fc2(self.relu1(self.fc1(self.max_pool(x))))
+        out = avg_out + max_out
+        return x * self.sigmoid(out) + x  # 残差
+
+
+# 空间注意力机制，先通道注意力机制、后空间注意力机制
+class SpatialAttention(nn.Module):
+    def __init__(self, kernel_size=7):
+        super(SpatialAttention, self).__init__()
+
+        assert kernel_size in (3, 7), 'kernel size must be 3 or 7'
+        padding = 3 if kernel_size == 7 else 1
+        self.conv1 = nn.Conv2d(2, 1, kernel_size, padding=padding, bias=False)
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, x1):
+        '''
+        :param x1: origin feature maps
+        :param x2: enhanced images (etc. ul images)
+        :return:
+        '''
+        avg_out = torch.mean(x1, dim=1, keepdim=True)
+        max_out, _ = torch.max(x1, dim=1, keepdim=True)
+        x = torch.cat([avg_out, max_out], dim=1)
+        x = self.conv1(x)
+        out = self.sigmoid(x) * x1
+        return out + x1  # 残差

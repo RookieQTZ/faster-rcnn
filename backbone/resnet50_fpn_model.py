@@ -138,7 +138,10 @@ def resnet50_fpn_backbone(pretrain_path="",
                           norm_layer=FrozenBatchNorm2d,  # FrozenBatchNorm2d的功能与BatchNorm2d类似，但参数无法更新
                           trainable_layers=3,
                           returned_layers=None,
-                          extra_blocks=None):
+                          extra_blocks=None,
+                          # cbam残差注意力机制
+                          cbam=True
+                          ):
     """
     搭建resnet50_fpn——backbone
     Args:
@@ -196,4 +199,4 @@ def resnet50_fpn_backbone(pretrain_path="",
     in_channels_list = [in_channels_stage2 * 2 ** (i - 1) for i in returned_layers]
     # 通过fpn后得到的每个特征层的channel
     out_channels = 256
-    return BackboneWithFPN(resnet_backbone, return_layers, in_channels_list, out_channels, extra_blocks=extra_blocks)
+    return BackboneWithFPN(resnet_backbone, cbam, return_layers, in_channels_list, out_channels, extra_blocks=extra_blocks)

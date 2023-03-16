@@ -265,7 +265,8 @@ class FasterRCNN(FasterRCNNBase):
                  box_batch_size_per_image=512, box_positive_fraction=0.25,  # fast rcnn计算误差时采样的样本数，以及正样本占所有样本的比例
                  bbox_reg_weights=None,
                  # 损失函数
-                 loss_fn="l1"):
+                 loss_fn="l1",
+                 ):
         if not hasattr(backbone, "out_channels"):
             raise ValueError(
                 "backbone should contain an attribute out_channels"

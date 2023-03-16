@@ -21,9 +21,10 @@ def create_model(num_classes, load_pretrain_weights=True):
     # resnet50 imagenet weights url: https://download.pytorch.org/models/resnet50-0676ba61.pth
     backbone = resnet50_fpn_backbone(pretrain_path="resnet50.pth",
                                      norm_layer=torch.nn.BatchNorm2d,
-                                     trainable_layers=3)
+                                     trainable_layers=3,
+                                     cbam=True)
     # 训练自己数据集时不要修改这里的91，修改的是传入的num_classes参数
-    model = FasterRCNN(backbone=backbone, num_classes=91, loss_fn="diou")
+    model = FasterRCNN(backbone=backbone, num_classes=91, loss_fn="l1")
 
     if load_pretrain_weights:
         # 载入预训练模型权重
