@@ -246,10 +246,10 @@ if __name__ == "__main__":
     # 指定接着从哪个epoch数开始训练
     parser.add_argument('--start_epoch', default=0, type=int, help='start epoch')
     # 训练的总epoch数
-    parser.add_argument('--epochs', default=20, type=int, metavar='N',
+    parser.add_argument('--epochs', default=10, type=int, metavar='N',
                         help='number of total epochs to run')
     # 学习率
-    parser.add_argument('--lr', default=0.01, type=float,
+    parser.add_argument('--lr', default=0.005, type=float,
                         help='initial learning rate, 0.02 is the default value for training '
                              'on 8 gpus and 2 images_per_gpu')
     # SGD的momentum参数

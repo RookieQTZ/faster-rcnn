@@ -98,6 +98,8 @@ class FeaturePyramidNetwork(nn.Module):
             # 三个下采样模块
             if i < len(in_channels_list) - 1:
                 inner_top_down_module = nn.Conv2d(out_channels, out_channels, 2, stride=2)
+                # inner_top_down_module = nn.MaxPool2d(kernel_size=2)
+                # inner_top_down_module = nn.AvgPool2d(kernel_size=2)
                 self.inner_top_downs.append(inner_top_down_module)
             layer_block_module = nn.Conv2d(out_channels, out_channels, 3, padding=1)
             self.inner_blocks.append(inner_block_module)
@@ -163,7 +165,7 @@ class FeaturePyramidNetwork(nn.Module):
         num_blocks = len(self.inner_top_downs)
         if idx < 0:
             idx += num_blocks
-        i = 0
+        i = 1
         out = x
         for module in self.inner_top_downs:
             if i == idx:
@@ -277,7 +279,7 @@ class FeaturePyramidNetwork(nn.Module):
             inner_down_top = F.interpolate(last_inner, size=feat_shape, mode="nearest")
             last_inner = inner_lateral + inner_down_top
             if double_fusion:
-                results.append(last_inner)
+                results.insert(0, last_inner)
             else:
                 results.insert(0, self.get_result_from_layer_blocks(last_inner, idx))
 
@@ -287,14 +289,14 @@ class FeaturePyramidNetwork(nn.Module):
             # 残差下采样fpn -> 3*3卷积
             # results2 中保存着每个预测特征层
             results2 = []
-            last_inner = results[-1]
-            results2.append(self.get_result_from_layer_blocks(last_inner, -1))
-            for idx in range(len(results) - 2, -1, -1):
+            last_inner = results[0]
+            results2.append(self.get_result_from_layer_blocks(last_inner, 0))
+            for idx in range(1, len(results)):
                 inner_lateral = self.get_result_from_inner_blocks2(results[idx], idx)
                 # 下采样
                 inner_top_down = self.get_result_from_top_down_inner_blocks(last_inner, idx)
                 last_inner = inner_lateral + inner_top_down + results[idx]
-                results2.insert(0, self.get_result_from_layer_blocks(last_inner, idx))
+                results2.append(self.get_result_from_layer_blocks(last_inner, idx))
 
             # 在layer4对应的预测特征层基础上生成预测特征矩阵5
             if self.extra_blocks is not None:
