@@ -25,15 +25,18 @@ class FasterRCNNBase(nn.Module):
             the model
     """
 
-    def __init__(self, backbone, rpn, roi_heads, transform, loss_fn):
+    def __init__(self, backbone, rpn, roi_heads, transform, loss_fn, cbam):
         super(FasterRCNNBase, self).__init__()
         self.transform = transform
         self.backbone = backbone
         self.rpn = rpn
         self.roi_heads = roi_heads
         self.loss_fn = loss_fn
+        self.cbam = cbam
         # used only on torchscript mode
         self._has_warned = False
+        print("loss function: " + loss_fn)
+        print("using cbam attention block: " + str(cbam))
 
     @torch.jit.unused
     def eager_outputs(self, losses, detections):
@@ -83,7 +86,7 @@ class FasterRCNNBase(nn.Module):
         images, targets = self.transform(images, targets)  # 对图像进行预处理 images:ImageList  targets:list
 
         # print(images.tensors.shape)
-        features = self.backbone(images.tensors)  # 将图像输入backbone得到特征图，如何将打包好的4维images送入网络
+        features = self.backbone(images.tensors, self.cbam)  # 将图像输入backbone得到特征图，如何将打包好的4维images送入网络
         if isinstance(features, torch.Tensor):  # 若只在一层特征层上预测，将feature放入有序字典中，并编号为‘0’
             features = OrderedDict([('0', features)])  # 若在多层特征层上预测，传入的就是一个有序字典
 
@@ -266,6 +269,8 @@ class FasterRCNN(FasterRCNNBase):
                  bbox_reg_weights=None,
                  # 损失函数
                  loss_fn="l1",
+                 # 注意力机制
+                 cbam=True
                  ):
         if not hasattr(backbone, "out_channels"):
             raise ValueError(
@@ -357,4 +362,4 @@ class FasterRCNN(FasterRCNNBase):
         # 对数据进行标准化，缩放，打包成batch等处理部分
         transform = GeneralizedRCNNTransform(min_size, max_size, image_mean, image_std)
 
-        super(FasterRCNN, self).__init__(backbone, rpn, roi_heads, transform, loss_fn)
+        super(FasterRCNN, self).__init__(backbone, rpn, roi_heads, transform, loss_fn, cbam)

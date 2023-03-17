@@ -11,6 +11,7 @@ from train_utils import GroupedBatchSampler, create_aspect_ratio_groups
 from train_utils import train_eval_utils as utils
 from network_files import multitask_loss
 import plot_curve
+from train_utils import loss_weight
 
 
 def create_model(num_classes, load_pretrain_weights=True):
@@ -21,10 +22,9 @@ def create_model(num_classes, load_pretrain_weights=True):
     # resnet50 imagenet weights url: https://download.pytorch.org/models/resnet50-0676ba61.pth
     backbone = resnet50_fpn_backbone(pretrain_path="resnet50.pth",
                                      norm_layer=torch.nn.BatchNorm2d,
-                                     trainable_layers=3,
-                                     cbam=True)
+                                     trainable_layers=3)
     # 训练自己数据集时不要修改这里的91，修改的是传入的num_classes参数
-    model = FasterRCNN(backbone=backbone, num_classes=91, loss_fn="l1")
+    model = FasterRCNN(backbone=backbone, num_classes=91, loss_fn="diou", cbam=True)
 
     if load_pretrain_weights:
         # 载入预训练模型权重
@@ -55,6 +55,8 @@ def main(args):
     # results_file = "./save_weights/results{}.txt".format(datetime.datetime.now().strftime("%Y%m%d-%H%M%S"))
     results_file = "./save_weights/results.txt"
     visdom_file = "./save_weights/visdom.log"
+    sigma_file = "./save_weights/sigma.txt"
+    loss_weight_file = "./save_weights/loss_weight.txt"
 
     data_transform = {
         "train": transforms.Compose([transforms.ToTensor(),
@@ -114,18 +116,21 @@ def main(args):
     model.to(device)
 
     # define optimizer
-    # params = [p for p in model.parameters() if p.requires_grad]
-    # optimizer = torch.optim.SGD(params,
-    #                             lr=args.lr,
-    #                             momentum=args.momentum,
-    #                             weight_decay=args.weight_decay)
-    weighted_loss_func = multitask_loss.UncertaintyLoss(4)
-    weighted_loss_func.to(device)
-    params = filter(lambda x: x.requires_grad, list(model.parameters()) + list(weighted_loss_func.parameters()))
+    params = [p for p in model.parameters() if p.requires_grad]
     optimizer = torch.optim.SGD(params,
                                 lr=args.lr,
                                 momentum=args.momentum,
                                 weight_decay=args.weight_decay)
+
+    ########### UncertaintyLoss ############
+    weighted_loss_func = multitask_loss.UncertaintyLoss(4)
+    weighted_loss_func.to(device)
+    # params = filter(lambda x: x.requires_grad, list(model.parameters()) + list(weighted_loss_func.parameters()))
+    # optimizer = torch.optim.SGD(params,
+    #                             lr=args.lr,
+    #                             momentum=args.momentum,
+    #                             weight_decay=args.weight_decay)
+    ########### UncertaintyLoss ############
 
     scaler = torch.cuda.amp.GradScaler() if args.amp else None
 
@@ -136,8 +141,11 @@ def main(args):
 
     # 如果指定了上次训练保存的权重文件地址，则接着上次结果接着训练
     viz = plot_curve.create_visdom(visdom_file)
+    # 上一轮loss
+    weight = torch.tensor([1.0, 1.0, 1.0, 1.0])
     if args.resume != "":
         plot_curve.load_visdom(viz, visdom_file)
+        weight = loss_weight.load(loss_weight_file)
         checkpoint = torch.load(args.resume, map_location='cpu')
         model.load_state_dict(checkpoint['model'])
         optimizer.load_state_dict(checkpoint['optimizer'])
@@ -153,10 +161,14 @@ def main(args):
 
     for epoch in range(args.start_epoch, args.epochs):
         # train for one epoch, printing every 10 iterations
-        mean_loss, loss_dict, lr = utils.train_one_epoch(model, optimizer, train_data_loader, weighted_loss_func,
-                                                         device=device, epoch=epoch,
-                                                         print_freq=50, warmup=True,
-                                                         scaler=scaler)
+        mean_loss, loss_dict, lr, weight = utils.train_one_epoch(model, optimizer, train_data_loader, weighted_loss_func,
+                                                                 device=device, epoch=epoch, last_loss=weight,
+                                                                 print_freq=50, warmup=True,
+                                                                 scaler=scaler,)
+
+        # 保存last_loss权重
+        loss_weight.save(weight, loss_weight_file)
+
         train_loss.append(mean_loss.item())
         learning_rate.append(lr)
 

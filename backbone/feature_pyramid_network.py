@@ -205,7 +205,6 @@ class BackboneWithFPN(nn.Module):
 
     def __init__(self,
                  backbone: nn.Module,
-                 cbam: bool,
                  return_layers=None,
                  in_channels_list=None,
                  out_channels=256,
@@ -225,17 +224,16 @@ class BackboneWithFPN(nn.Module):
         else:
             self.body = backbone
 
-        if cbam:
-            if channel_attention is None:
-                self.channel_blocks = nn.ModuleList()
-                for in_channels in in_channels_list:
-                    if in_channels == 0:
-                        continue
-                    channel_block_module = ChannelAttention(in_channels)
-                    self.channel_blocks.append(channel_block_module)
+        if channel_attention is None:
+            self.channel_blocks = nn.ModuleList()
+            for in_channels in in_channels_list:
+                if in_channels == 0:
+                    continue
+                channel_block_module = ChannelAttention(in_channels)
+                self.channel_blocks.append(channel_block_module)
 
-            if spatial_attention is None:
-                self.spatial_attention = SpatialAttention()
+        if spatial_attention is None:
+            self.spatial_attention = SpatialAttention()
 
         self.fpn = FeaturePyramidNetwork(
             in_channels_list=in_channels_list,
@@ -300,20 +298,21 @@ class BackboneWithFPN(nn.Module):
 
         return out
 
-    def forward(self, x):
+    def forward(self, x, cbam):
         # body: orderDict
         x = self.body(x)
 
-        # 通道注意力机制
-        x = self.get_channel_result(x)
+        if cbam:
+            # 通道注意力机制
+            x = self.get_channel_result(x)
 
-        # 此时，x为resnet50 layer1 layer2 layer3 layer4的输出
-        # h = x['0'].shape[2]
-        # w = x['0'].shape[3]
-        # ul_x = self.get_ul_pool_result(ul_x, h, w)
+            # 此时，x为resnet50 layer1 layer2 layer3 layer4的输出
+            # h = x['0'].shape[2]
+            # w = x['0'].shape[3]
+            # ul_x = self.get_ul_pool_result(ul_x, h, w)
 
-        # todo: 将x与ul_x进行注意力增强
-        x = self.get_attention_result(x)
+            # todo: 将x与ul_x进行注意力增强
+            x = self.get_attention_result(x)
 
         x = self.fpn(x)
         return x

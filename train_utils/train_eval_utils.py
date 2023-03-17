@@ -12,7 +12,7 @@ import train_utils.distributed_utils as utils
 import plot_curve
 
 
-def train_one_epoch(model, optimizer, data_loader, weighted_loss_func, device, epoch,
+def train_one_epoch(model, optimizer, data_loader, weighted_loss_func, device, epoch, last_loss,
                     print_freq=50, warmup=False, scaler=None):
     model.train()
     metric_logger = utils.MetricLogger(delimiter="  ")
@@ -27,6 +27,7 @@ def train_one_epoch(model, optimizer, data_loader, weighted_loss_func, device, e
         lr_scheduler = utils.warmup_lr_scheduler(optimizer, warmup_iters, warmup_factor)
 
     mloss = torch.zeros(1).to(device)  # mean losses
+
     for i, [org_ul_images, targets] in enumerate(metric_logger.log_every(data_loader, print_freq, header)):
         images = [org_ul_image[0] for org_ul_image in org_ul_images]
         # ul_images = [org_ul_image[1] for org_ul_image in org_ul_images]
@@ -39,11 +40,20 @@ def train_one_epoch(model, optimizer, data_loader, weighted_loss_func, device, e
             loss_dict = model(images, targets)
             # 为分类损失多加点损失权重？
             # losses = sum(loss for loss in loss_dict.values())
-            losses, sigma = weighted_loss_func(*[loss for loss in loss_dict.values()])
+
+            # losses, sigma = weighted_loss_func(*[loss for loss in loss_dict.values()])
+
+            cur_loss = [loss for loss in loss_dict.values()]
+            weight = get_losses_weights(cur_loss)
+            new_losses = [loss * w for loss, w in zip(cur_loss, weight)]  # new_losses: [0.6919, 0.5297, 1.8270, 0.8757])
+            losses = sum(loss for loss in new_losses)  # loss: 3.9243
+
+            if i == 0:
+                print("Epoch: [" + str(epoch) + "]  weight: " + str([str(w.item()) for w in weight]))
 
         # 每个epoch开始时打印一次sigma
-        if i == 0:
-            print("Epoch: [" + str(epoch) + "]  sigma: " + sigma)
+        # if i == 0:
+        #     print("Epoch: [" + str(epoch) + "]  sigma: " + sigma)
 
         # reduce losses over all GPUs for logging purpose
         loss_dict_reduced = utils.reduce_dict(loss_dict)
@@ -74,7 +84,7 @@ def train_one_epoch(model, optimizer, data_loader, weighted_loss_func, device, e
         now_lr = optimizer.param_groups[0]["lr"]
         metric_logger.update(lr=now_lr)
 
-    return mloss, loss_dict, now_lr
+    return mloss, loss_dict, now_lr, weight
 
 
 @torch.no_grad()
@@ -145,3 +155,16 @@ def _get_iou_types(model):
         model_without_ddp = model.module
     iou_types = ["bbox"]
     return iou_types
+
+
+def get_losses_weights(loss_list: [list, np.ndarray, torch.Tensor]):
+    if type(loss_list) != torch.Tensor:
+        loss_list = torch.tensor(loss_list)
+    weights = torch.div(loss_list, torch.sum(loss_list)) * loss_list.shape[0]
+    # weights = torch.round(weights, decimals=4)
+    return weights
+
+# losses = torch.tensor([0.8, 0.7, 1.3, 0.9])	# old_loss = torch.sum(losses) = 3.7
+# loss_w = get_losses_weights(losses)			# loss_w: [0.8649, 0.7568, 1.4054, 0.9730]
+# new_losses = losses * loss_w				# new_losses: [0.6919, 0.5297, 1.8270, 0.8757])
+# loss = torch.sum(new_losses)				# loss: 3.9243
