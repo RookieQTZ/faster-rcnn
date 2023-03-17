@@ -79,19 +79,41 @@ class FeaturePyramidNetwork(nn.Module):
             a new list of feature maps and their corresponding names
     """
 
-    def __init__(self, in_channels_list, out_channels, extra_blocks=None):
+    def __init__(self, in_channels_list, out_channels,
+                 channel_attention=None, spatial_attention=None,
+                 extra_blocks=None):
         super().__init__()
         # 用来调整resnet特征矩阵(layer1,2,3,4)的channel（kernel_size=1）
         self.inner_blocks = nn.ModuleList()
+        # fixme： inner2
+        self.inner_blocks2 = nn.ModuleList()
+        self.inner_top_downs = nn.ModuleList()
         # 对调整后的特征矩阵使用3x3的卷积核来得到对应的预测特征矩阵
         self.layer_blocks = nn.ModuleList()
-        for in_channels in in_channels_list:
+        for i, in_channels in enumerate(in_channels_list):
             if in_channels == 0:
                 continue
             inner_block_module = nn.Conv2d(in_channels, out_channels, 1)
+            inner_block_module2 = nn.Conv2d(out_channels, out_channels, 1)
+            # 三个下采样模块
+            if i < len(in_channels_list) - 1:
+                inner_top_down_module = nn.Conv2d(out_channels, out_channels, 2, stride=2)
+                self.inner_top_downs.append(inner_top_down_module)
             layer_block_module = nn.Conv2d(out_channels, out_channels, 3, padding=1)
             self.inner_blocks.append(inner_block_module)
+            self.inner_blocks2.append(inner_block_module2)
             self.layer_blocks.append(layer_block_module)
+
+        if channel_attention is None:
+            self.channel_blocks = nn.ModuleList()
+            for in_channels in in_channels_list:
+                if in_channels == 0:
+                    continue
+                channel_block_module = ChannelAttention(in_channels)
+                self.channel_blocks.append(channel_block_module)
+
+        if spatial_attention is None:
+            self.spatial_attention = SpatialAttention()
 
         # initialize parameters now to avoid modifying the initialization of top_blocks
         for m in self.children():
@@ -117,6 +139,38 @@ class FeaturePyramidNetwork(nn.Module):
             i += 1
         return out
 
+    def get_result_from_inner_blocks2(self, x: Tensor, idx: int) -> Tensor:
+        """
+        This is equivalent to self.inner_blocks[idx](x),
+        but torchscript doesn't support this yet
+        """
+        num_blocks = len(self.inner_blocks2)
+        if idx < 0:
+            idx += num_blocks
+        i = 0
+        out = x
+        for module in self.inner_blocks2:
+            if i == idx:
+                out = module(x)
+            i += 1
+        return out
+
+    def get_result_from_top_down_inner_blocks(self, x: Tensor, idx: int) -> Tensor:
+        """
+        This is equivalent to self.inner_blocks[idx](x),
+        but torchscript doesn't support this yet
+        """
+        num_blocks = len(self.inner_top_downs)
+        if idx < 0:
+            idx += num_blocks
+        i = 0
+        out = x
+        for module in self.inner_top_downs:
+            if i == idx:
+                out = module(x)
+            i += 1
+        return out
+
     def get_result_from_layer_blocks(self, x: Tensor, idx: int) -> Tensor:
         """
         This is equivalent to self.layer_blocks[idx](x),
@@ -133,11 +187,61 @@ class FeaturePyramidNetwork(nn.Module):
             i += 1
         return out
 
-    def forward(self, x: Dict[str, Tensor]) -> Dict[str, Tensor]:
+    def get_result_from_channel_blocks(self, x: Tensor, idx: int) -> Tensor:
+        """
+        This is equivalent to self.inner_blocks[idx](x),
+        but torchscript doesn't support this yet
+        """
+        num_blocks = len(self.channel_blocks)
+        if idx < 0:
+            idx += num_blocks
+        i = 0
+        out = x
+        for module in self.channel_blocks:
+            if i == idx:
+                out = module(x)
+            i += 1
+        return out
+
+    def get_channel_result(self, x):
+        # unpack OrderedDict into two lists for easier handling
+        # names = list(x.keys())
+        # x = list(x.values())
+        #
+        # # result中保存着每个预测特征层
+        results = []
+
+        for idx in range(len(x) - 1, -1, -1):
+            channel_result = self.get_result_from_channel_blocks(x[idx], idx)
+            results.insert(0, channel_result)
+
+        # make it back an OrderedDict
+        # out = OrderedDict([(k, v) for k, v in zip(names, results)])
+        return results
+
+    def get_attention_result(self, x):
+        # unpack OrderedDict into two lists for easier handling
+        # names = list(x.keys())
+        # x = list(x.values())
+
+        # result中保存着每个预测特征层
+        results = []
+
+        for idx in range(len(x) - 1, -1, -1):
+            results.insert(0, self.spatial_attention(x[idx]))
+
+        # make it back an OrderedDict
+        # out = OrderedDict([(k, v) for k, v in zip(names, results)])
+
+        return results
+
+    def forward(self, x: Dict[str, Tensor], cbam: bool, double_fusion: bool) -> Dict[str, Tensor]:
         """
         Computes the FPN for a set of feature maps.
         Arguments:
             x (OrderedDict[Tensor]): feature maps for each feature level.
+            cbam
+            double_fusion
         Returns:
             results (OrderedDict[Tensor]): feature maps after FPN layers.
                 They are ordered from highest resolution first.
@@ -146,6 +250,15 @@ class FeaturePyramidNetwork(nn.Module):
         names = list(x.keys())
         x = list(x.values())
 
+        # fixme: 注意力机制
+        if cbam:
+            # 此时，x为resnet50 layer1 layer2 layer3 layer4的输出
+            # 通道注意力机制
+            x = self.get_channel_result(x)
+
+            # 空间注意力机制
+            x = self.get_attention_result(x)
+
         # 将resnet layer4的channel调整到指定的out_channels
         # last_inner = self.inner_blocks[-1](x[-1])
         last_inner = self.get_result_from_inner_blocks(x[-1], -1)
@@ -153,18 +266,43 @@ class FeaturePyramidNetwork(nn.Module):
         results = []
         # 将layer4调整channel后的特征矩阵，通过3x3卷积后得到对应的预测特征矩阵
         # results.append(self.layer_blocks[-1](last_inner))
-        results.append(self.get_result_from_layer_blocks(last_inner, -1))
+        if double_fusion:
+            results.append(last_inner)
+        else:
+            results.append(self.get_result_from_layer_blocks(last_inner, -1))
 
         for idx in range(len(x) - 2, -1, -1):
             inner_lateral = self.get_result_from_inner_blocks(x[idx], idx)
             feat_shape = inner_lateral.shape[-2:]
-            inner_top_down = F.interpolate(last_inner, size=feat_shape, mode="nearest")
-            last_inner = inner_lateral + inner_top_down
-            results.insert(0, self.get_result_from_layer_blocks(last_inner, idx))
+            inner_down_top = F.interpolate(last_inner, size=feat_shape, mode="nearest")
+            last_inner = inner_lateral + inner_down_top
+            if double_fusion:
+                results.append(last_inner)
+            else:
+                results.insert(0, self.get_result_from_layer_blocks(last_inner, idx))
 
-        # 在layer4对应的预测特征层基础上生成预测特征矩阵5
-        if self.extra_blocks is not None:
-            results, names = self.extra_blocks(results, x, names)
+        # fixme: 注意力机制
+
+        if double_fusion:
+            # 残差下采样fpn -> 3*3卷积
+            # results2 中保存着每个预测特征层
+            results2 = []
+            last_inner = results[-1]
+            results2.append(self.get_result_from_layer_blocks(last_inner, -1))
+            for idx in range(len(results) - 2, -1, -1):
+                inner_lateral = self.get_result_from_inner_blocks2(results[idx], idx)
+                # 下采样
+                inner_top_down = self.get_result_from_top_down_inner_blocks(last_inner, idx)
+                last_inner = inner_lateral + inner_top_down + results[idx]
+                results2.insert(0, self.get_result_from_layer_blocks(last_inner, idx))
+
+            # 在layer4对应的预测特征层基础上生成预测特征矩阵5
+            if self.extra_blocks is not None:
+                results, names = self.extra_blocks(results2, x, names)
+        else:
+            # 在layer4对应的预测特征层基础上生成预测特征矩阵5
+            if self.extra_blocks is not None:
+                results, names = self.extra_blocks(results, x, names)
 
         # make it back an OrderedDict
         out = OrderedDict([(k, v) for k, v in zip(names, results)])
@@ -210,8 +348,6 @@ class BackboneWithFPN(nn.Module):
                  out_channels=256,
                  extra_blocks=None,
                  re_getter=True,
-                 spatial_attention=None,
-                 channel_attention=None,
                  ):
         super().__init__()
 
@@ -224,17 +360,6 @@ class BackboneWithFPN(nn.Module):
         else:
             self.body = backbone
 
-        if channel_attention is None:
-            self.channel_blocks = nn.ModuleList()
-            for in_channels in in_channels_list:
-                if in_channels == 0:
-                    continue
-                channel_block_module = ChannelAttention(in_channels)
-                self.channel_blocks.append(channel_block_module)
-
-        if spatial_attention is None:
-            self.spatial_attention = SpatialAttention()
-
         self.fpn = FeaturePyramidNetwork(
             in_channels_list=in_channels_list,
             out_channels=out_channels,
@@ -243,78 +368,11 @@ class BackboneWithFPN(nn.Module):
 
         self.out_channels = out_channels
 
-    def get_result_from_channel_blocks(self, x: Tensor, idx: int) -> Tensor:
-        """
-        This is equivalent to self.inner_blocks[idx](x),
-        but torchscript doesn't support this yet
-        """
-        num_blocks = len(self.channel_blocks)
-        if idx < 0:
-            idx += num_blocks
-        i = 0
-        out = x
-        for module in self.channel_blocks:
-            if i == idx:
-                out = module(x)
-            i += 1
-        return out
-
-    def get_channel_result(self, x):
-        # unpack OrderedDict into two lists for easier handling
-        names = list(x.keys())
-        x = list(x.values())
-
-        # result中保存着每个预测特征层
-        results = []
-
-        for idx in range(len(x) - 1, -1, -1):
-            channel_result = self.get_result_from_channel_blocks(x[idx], idx)
-            results.insert(0, channel_result)
-
-        # make it back an OrderedDict
-        out = OrderedDict([(k, v) for k, v in zip(names, results)])
-        return out
-
-    def get_ul_pool_result(self, ul_x, h, w):
-        ul_poolings = UlPoolings(h, w)
-        return_layers = {'pool1': '0', 'pool2': '1', 'pool3': '2', 'pool4': '3'}
-        ul_body = IntermediateLayerGetter(ul_poolings, return_layers=return_layers)
-        ul_x = ul_body(ul_x)
-        return ul_x
-
-    def get_attention_result(self, x):
-        # unpack OrderedDict into two lists for easier handling
-        names = list(x.keys())
-        x = list(x.values())
-
-        # result中保存着每个预测特征层
-        results = []
-
-        for idx in range(len(x) - 1, -1, -1):
-            results.insert(0, self.spatial_attention(x[idx]))
-
-        # make it back an OrderedDict
-        out = OrderedDict([(k, v) for k, v in zip(names, results)])
-
-        return out
-
-    def forward(self, x, cbam):
+    def forward(self, x, cbam, double_fusion):
         # body: orderDict
         x = self.body(x)
 
-        if cbam:
-            # 通道注意力机制
-            x = self.get_channel_result(x)
-
-            # 此时，x为resnet50 layer1 layer2 layer3 layer4的输出
-            # h = x['0'].shape[2]
-            # w = x['0'].shape[3]
-            # ul_x = self.get_ul_pool_result(ul_x, h, w)
-
-            # todo: 将x与ul_x进行注意力增强
-            x = self.get_attention_result(x)
-
-        x = self.fpn(x)
+        x = self.fpn(x, cbam, double_fusion)
         return x
 
 

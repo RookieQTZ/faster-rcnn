@@ -160,7 +160,7 @@ def _get_iou_types(model):
 def get_losses_weights(loss_list: [list, np.ndarray, torch.Tensor]):
     if type(loss_list) != torch.Tensor:
         loss_list = torch.tensor(loss_list)
-    weights = torch.div(loss_list, torch.sum(loss_list)) * loss_list.shape[0]
+    weights = torch.div(loss_list, torch.sum(loss_list)) * loss_list.shape[0] * 1.5
     # weights = torch.round(weights, decimals=4)
     return weights
 
