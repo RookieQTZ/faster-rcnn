@@ -24,7 +24,7 @@ def create_model(num_classes, load_pretrain_weights=True):
                                      norm_layer=torch.nn.BatchNorm2d,
                                      trainable_layers=3)
     # 训练自己数据集时不要修改这里的91，修改的是传入的num_classes参数
-    model = FasterRCNN(backbone=backbone, num_classes=91, loss_fn="l1", cbam=False, double_fusion=True)
+    model = FasterRCNN(backbone=backbone, num_classes=91, loss_fn="l1", focal=False, cbam=False, double_fusion=False)
 
     if load_pretrain_weights:
         # 载入预训练模型权重
@@ -262,7 +262,7 @@ if __name__ == "__main__":
                         metavar='W', help='weight decay (default: 1e-4)',
                         dest='weight_decay')
     # 训练的batch size
-    parser.add_argument('--batch_size', default=2, type=int, metavar='N',
+    parser.add_argument('--batch_size', default=1, type=int, metavar='N',
                         help='batch size when training.')
     parser.add_argument('--aspect-ratio-group-factor', default=3, type=int)
     # 是否使用混合精度训练(需要GPU支持混合精度)

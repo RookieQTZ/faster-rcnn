@@ -1,11 +1,13 @@
 from typing import Optional, List, Dict, Tuple
 
 import torch
+import torchvision.ops
 from torch import Tensor
 import torch.nn.functional as F
 
 from . import det_utils
 from . import boxes as box_ops
+from . import focal_loss
 
 
 class RoIHeads(torch.nn.Module):
@@ -51,6 +53,9 @@ class RoIHeads(torch.nn.Module):
         self.score_thresh = score_thresh  # default: 0.05
         self.nms_thresh = nms_thresh      # default: 0.5
         self.detection_per_img = detection_per_img  # default: 100
+
+        # focal loss
+        self.focal_loss = focal_loss.FocalLoss()
 
     def assign_targets_to_proposals(self, proposals, gt_boxes, gt_labels):
         # type: (List[Tensor], List[Tensor], List[Tensor]) -> Tuple[List[Tensor], List[Tensor]]
@@ -299,8 +304,8 @@ class RoIHeads(torch.nn.Module):
 
         return all_boxes, all_scores, all_labels
 
-    def fastrcnn_loss(self, class_logits, box_regression, proposals, labels, regression_targets, matched_gt_box, loss_fn):
-        # type: (Tensor, Tensor, List[Tensor], List[Tensor], List[Tensor], List[Tensor], str) -> Tuple[Tensor, Tensor]
+    def fastrcnn_loss(self, class_logits, box_regression, proposals, labels, regression_targets, matched_gt_box, loss_fn, focal):
+        # type: (Tensor, Tensor, List[Tensor], List[Tensor], List[Tensor], List[Tensor], str, bool) -> Tuple[Tensor, Tensor]
         """
         Computes the loss for Faster R-CNN.
 
@@ -312,6 +317,7 @@ class RoIHeads(torch.nn.Module):
             regression_targets : 真实目标边界框信息
             matched_gt_box
             loss_fn : l1 iou giou diou ciou
+            focal : 是否使用focal loss
 
         Returns:
             classification_loss (Tensor)
@@ -326,7 +332,11 @@ class RoIHeads(torch.nn.Module):
         # 计算类别损失信息，損失太大
         # classification_loss = F.binary_cross_entropy_with_logits(class_logits[:, 1], labels.float())
         # fixme：给一个较大的损失权重
-        classification_loss = F.cross_entropy(class_logits, labels)
+        # if focal:
+        #     classification_loss = 3. * torchvision.ops.sigmoid_focal_loss(class_logits[:, 1], labels.float(), reduction="mean")
+        # else:
+        #     classification_loss = 3. * F.cross_entropy(class_logits, labels)
+        classification_loss = 3. * F.cross_entropy(class_logits, labels)
 
         # get indices that correspond to the regression targets for
         # the corresponding ground truth labels, to be used with
@@ -381,6 +391,7 @@ class RoIHeads(torch.nn.Module):
                 proposals,      # type: List[Tensor]
                 image_shapes,   # type: List[Tuple[int, int]]
                 loss_fn,        # type: str
+                focal,          # type: bool
                 targets=None    # type: Optional[List[Dict[str, Tensor]]]
                 ):
         # type: (...) -> Tuple[List[Dict[str, Tensor]], Dict[str, Tensor]]
@@ -390,6 +401,7 @@ class RoIHeads(torch.nn.Module):
             proposals (List[Tensor[N, 4]])
             image_shapes (List[Tuple[H, W]])
             loss_fn (str)
+            focal (bool)
             targets (List[Dict])
         """
 
@@ -428,7 +440,7 @@ class RoIHeads(torch.nn.Module):
 
         assert labels is not None and regression_targets is not None and matched_gt_box is not None
         loss_classifier, loss_box_reg = self.fastrcnn_loss(
-            class_logits, box_regression, proposals, labels, regression_targets, matched_gt_box, loss_fn)
+            class_logits, box_regression, proposals, labels, regression_targets, matched_gt_box, loss_fn, focal)
         losses = {
             "loss_classifier": loss_classifier,
             "loss_box_reg": loss_box_reg

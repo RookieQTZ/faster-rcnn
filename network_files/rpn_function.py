@@ -8,6 +8,7 @@ import torchvision
 from . import det_utils
 from . import boxes as box_ops
 from .image_list import ImageList
+from . import focal_loss
 
 
 @torch.jit.unused
@@ -377,6 +378,9 @@ class RegionProposalNetwork(torch.nn.Module):
         self.score_thresh = score_thresh
         self.min_size = 1.
 
+        # focal loss
+        self.focal_loss = focal_loss.FocalLoss()
+
     def pre_nms_top_n(self):
         if self.training:
             return self._pre_nms_top_n['training']
@@ -538,8 +542,8 @@ class RegionProposalNetwork(torch.nn.Module):
             final_scores.append(scores)
         return final_boxes, final_scores
 
-    def compute_loss(self, objectness, pred_bbox_deltas, proposals, labels, regression_targets, gt_boxes, loss_fn):
-        # type: (Tensor, Tensor, List[Tensor], List[Tensor], List[Tensor], List[Tensor], str) -> Tuple[Tensor, Tensor]
+    def compute_loss(self, objectness, pred_bbox_deltas, proposals, labels, regression_targets, gt_boxes, loss_fn, focal):
+        # type: (Tensor, Tensor, List[Tensor], List[Tensor], List[Tensor], List[Tensor], str, bool) -> Tuple[Tensor, Tensor]
         """
         计算RPN损失，包括类别损失（前景与背景），bbox rgressieon损失
         Arguments:
@@ -550,6 +554,7 @@ class RegionProposalNetwork(torch.nn.Module):
             regression_targets (List[Tensor])：真实的bbox regression
             gt_boxes
             loss_fn (str)：l1 iou giou diou ciou
+            focal: 是否使用focal loss
 
         Returns:
             objectness_loss (Tensor) : 类别损失
@@ -598,16 +603,22 @@ class RegionProposalNetwork(torch.nn.Module):
 
         # 计算目标预测概率损失
         # fixme： 给一个较大的损失权重
-        objectness_loss = F.binary_cross_entropy_with_logits(
-            objectness[sampled_inds], labels[sampled_inds]
-        )
+        if focal:
+            objectness_loss = 3. * torchvision.ops.sigmoid_focal_loss(
+                objectness[sampled_inds], labels[sampled_inds], reduction="mean"
+            )
+        else:
+            objectness_loss = 3. * F.binary_cross_entropy_with_logits(
+                objectness[sampled_inds], labels[sampled_inds]
+            )
 
         return objectness_loss, box_loss
 
     def forward(self,
                 images,        # type: ImageList
                 features,      # type: Dict[str, Tensor]
-                loss_fn,      # type: str
+                loss_fn,       # type: str
+                focal,       # type: bool
                 targets=None   # type: Optional[List[Dict[str, Tensor]]]
                 ):
         # type: (...) -> Tuple[List[Tensor], Dict[str, Tensor]]
@@ -670,7 +681,7 @@ class RegionProposalNetwork(torch.nn.Module):
         regression_targets = self.box_coder.encode(matched_gt_boxes, anchors)
         proposals = proposals.view(-1, 4)
         loss_objectness, loss_rpn_box_reg = self.compute_loss(
-            objectness, pred_bbox_deltas, proposals, labels, regression_targets, matched_gt_boxes, loss_fn
+            objectness, pred_bbox_deltas, proposals, labels, regression_targets, matched_gt_boxes, loss_fn, focal
         )
         losses = {
             "loss_objectness": loss_objectness,
