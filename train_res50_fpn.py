@@ -24,7 +24,7 @@ def create_model(num_classes, load_pretrain_weights=True):
                                      norm_layer=torch.nn.BatchNorm2d,
                                      trainable_layers=3)
     # 训练自己数据集时不要修改这里的91，修改的是传入的num_classes参数
-    model = FasterRCNN(backbone=backbone, num_classes=91, loss_fn="l1", focal=False, cbam=False, double_fusion=False)
+    model = FasterRCNN(backbone=backbone, num_classes=91, loss_fn=args.loss_fn, focal=args.focal, cbam=args.cbam, double_fusion=args.double_fusion)
 
     if load_pretrain_weights:
         # 载入预训练模型权重
@@ -267,6 +267,14 @@ if __name__ == "__main__":
     parser.add_argument('--aspect-ratio-group-factor', default=3, type=int)
     # 是否使用混合精度训练(需要GPU支持混合精度)
     parser.add_argument("--amp", default=False, help="Use torch.cuda.amp for mixed precision training")
+    # 使用的损失函数
+    parser.add_argument("--loss-fn", default='l1', help="loss function to use")
+    # 是否使用Focal loss
+    parser.add_argument("--focal", default=False, help="Use focal loss")
+    # 是否使用cbam注意力机制
+    parser.add_argument("--cbam", default=False, help="Use cbam attention block")
+    # 是否使用双向融合fpn
+    parser.add_argument("--double-fusion", default=False, help="Use double fusion fpn block")
 
     args = parser.parse_args()
     print(args)
