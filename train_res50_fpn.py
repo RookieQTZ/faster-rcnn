@@ -20,7 +20,7 @@ def create_model(args, num_classes, load_pretrain_weights=True):
     # 如果GPU显存很大可以设置比较大的batch_size就可以将norm_layer设置为普通的BatchNorm2d
     # trainable_layers包括['layer4', 'layer3', 'layer2', 'layer1', 'conv1']， 5代表全部训练
     # resnet50 imagenet weights url: https://download.pytorch.org/models/resnet50-0676ba61.pth
-    backbone = resnet50_fpn_backbone(pretrain_path="resnet50.pth",
+    backbone = resnet50_fpn_backbone(pretrain_path=args.res_pretrain_path,
                                      norm_layer=torch.nn.BatchNorm2d,
                                      trainable_layers=3)
     # 训练自己数据集时不要修改这里的91，修改的是传入的num_classes参数
@@ -29,7 +29,7 @@ def create_model(args, num_classes, load_pretrain_weights=True):
     if load_pretrain_weights:
         # 载入预训练模型权重
         # https://download.pytorch.org/models/fasterrcnn_resnet50_fpn_coco-258fb6c6.pth
-        weights_dict = torch.load("fasterrcnn_resnet50_fpn_coco.pth", map_location='cpu')
+        weights_dict = torch.load(args.rcnn_pretrain_path, map_location='cpu')
         weights_dict.pop('rpn.head.cls_logits.weight')
         weights_dict.pop('rpn.head.cls_logits.bias')
         weights_dict.pop('rpn.head.bbox_pred.weight')
@@ -239,6 +239,10 @@ if __name__ == "__main__":
     parser.add_argument('--device', default='cuda:0', help='device')
     # 训练数据集的根目录(VOCdevkit)
     parser.add_argument('--data_path', default='./data/test', help='dataset')
+    # resnet预训练模型地址
+    parser.add_argument('--res_pretrain_path', default='resnet50.pth', help='resnet50 pretrained path')
+    # 训练数据集的根目录(VOCdevkit)
+    parser.add_argument('--rcnn_pretrain_path', default='fasterrcnn_resnet50_fpn_coco.pth', help='rcnn pretrained path')
     # 检测目标类别数(不包含背景)
     parser.add_argument('--num_classes', default=1, type=int, help='num_classes')
     # 文件保存地址
