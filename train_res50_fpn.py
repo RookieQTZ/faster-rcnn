@@ -241,7 +241,7 @@ if __name__ == "__main__":
     parser.add_argument('--data_path', default='./data/test', help='dataset')
     # resnet预训练模型地址
     parser.add_argument('--res_pretrain_path', default='resnet50.pth', help='resnet50 pretrained path')
-    # 训练数据集的根目录(VOCdevkit)
+    # faster rcnn fpn预训练模型地址
     parser.add_argument('--rcnn_pretrain_path', default='fasterrcnn_resnet50_fpn_coco.pth', help='rcnn pretrained path')
     # 检测目标类别数(不包含背景)
     parser.add_argument('--num_classes', default=1, type=int, help='num_classes')
