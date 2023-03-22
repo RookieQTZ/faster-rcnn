@@ -392,6 +392,7 @@ class RoIHeads(torch.nn.Module):
                 image_shapes,   # type: List[Tuple[int, int]]
                 loss_fn,        # type: str
                 focal,          # type: bool
+                val,          # type: bool
                 targets=None    # type: Optional[List[Dict[str, Tensor]]]
                 ):
         # type: (...) -> Tuple[List[Dict[str, Tensor]], Dict[str, Tensor]]
@@ -402,6 +403,7 @@ class RoIHeads(torch.nn.Module):
             image_shapes (List[Tuple[H, W]])
             loss_fn (str)
             focal (bool)
+            val (bool)
             targets (List[Dict])
         """
 
@@ -420,9 +422,13 @@ class RoIHeads(torch.nn.Module):
         #     labels = None
         #     regression_targets = None
 
-        # 划分正负样本，统计对应gt的标签以及边界框回归信息
-        # lables出现了2？？
-        proposals, labels, regression_targets, matched_gt_box = self.select_training_samples(proposals, targets)
+        if self.training or val:
+            # 划分正负样本，统计对应gt的标签以及边界框回归信息
+            # lables出现了2？？
+            proposals, labels, regression_targets, matched_gt_box = self.select_training_samples(proposals, targets)
+        else:
+            labels = None
+            regression_targets = None
 
         # 将采集样本通过Multi-scale RoIAlign pooling层
         # box_features_shape: [num_proposals, channel, height, width]
@@ -438,13 +444,14 @@ class RoIHeads(torch.nn.Module):
         result = torch.jit.annotate(List[Dict[str, torch.Tensor]], [])
         losses = {}
 
-        assert labels is not None and regression_targets is not None and matched_gt_box is not None
-        loss_classifier, loss_box_reg = self.fastrcnn_loss(
-            class_logits, box_regression, proposals, labels, regression_targets, matched_gt_box, loss_fn, focal)
-        losses = {
-            "loss_classifier": loss_classifier,
-            "loss_box_reg": loss_box_reg
-        }
+        if self.training or val:
+            assert labels is not None and regression_targets is not None and matched_gt_box is not None
+            loss_classifier, loss_box_reg = self.fastrcnn_loss(
+                class_logits, box_regression, proposals, labels, regression_targets, matched_gt_box, loss_fn, focal)
+            losses = {
+                "loss_classifier": loss_classifier,
+                "loss_box_reg": loss_box_reg
+            }
         if self.training:
             pass
             # assert labels is not None and regression_targets is not None and matched_gt_box is not None

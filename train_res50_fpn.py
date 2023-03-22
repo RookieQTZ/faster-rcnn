@@ -268,7 +268,7 @@ if __name__ == "__main__":
     # 是否使用混合精度训练(需要GPU支持混合精度)
     parser.add_argument("--amp", default=False, help="Use torch.cuda.amp for mixed precision training")
     # 使用的损失函数
-    parser.add_argument("--loss-fn", default='l1', help="loss function to use")
+    parser.add_argument("--loss-fn", default='iou', help="loss function to use")
     # 是否使用Focal loss
     parser.add_argument("--focal", default=False, help="Use focal loss")
     # 是否使用cbam注意力机制

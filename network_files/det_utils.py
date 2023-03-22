@@ -539,34 +539,75 @@ def giou_loss(bboxes1, bboxes2):
     return torch.sum(1-ious)
 
 
-def iou_loss(bboxes1, bboxes2):
-    rows = bboxes1.shape[0]
-    cols = bboxes2.shape[0]
-    ious = torch.zeros((rows, cols))
-    if rows * cols == 0:
-        return ious
-    exchange = False
-    if bboxes1.shape[0] > bboxes2.shape[0]:
-        bboxes1, bboxes2 = bboxes2, bboxes1
-        ious = torch.zeros((cols, rows))
-        exchange = True
-    area1 = (bboxes1[:, 2] - bboxes1[:, 0]) * (
-        bboxes1[:, 3] - bboxes1[:, 1])
-    area2 = (bboxes2[:, 2] - bboxes2[:, 0]) * (
-        bboxes2[:, 3] - bboxes2[:, 1])
+# def iou_loss(bboxes1, bboxes2):
+#     rows = bboxes1.shape[0]
+#     cols = bboxes2.shape[0]
+#     ious = torch.zeros((rows, cols))
+#     if rows * cols == 0:
+#         return ious
+#     exchange = False
+#     if bboxes1.shape[0] > bboxes2.shape[0]:
+#         bboxes1, bboxes2 = bboxes2, bboxes1
+#         ious = torch.zeros((cols, rows))
+#         exchange = True
+#     area1 = (bboxes1[:, 2] - bboxes1[:, 0]) * (
+#         bboxes1[:, 3] - bboxes1[:, 1])
+#     area2 = (bboxes2[:, 2] - bboxes2[:, 0]) * (
+#         bboxes2[:, 3] - bboxes2[:, 1])
+#
+#     inter_max_xy = torch.min(bboxes1[:, 2:], bboxes2[:, 2:])
+#     inter_min_xy = torch.max(bboxes1[:, :2], bboxes2[:, :2])
+#
+#     inter = torch.clamp((inter_max_xy - inter_min_xy), min=0)
+#     inter_area = inter[:, 0] * inter[:, 1]
+#     union = area1+area2-inter_area
+#     ious = inter_area / union
+#     ious = torch.clamp(ious, min=0, max=1.0)
+#     if exchange:
+#         ious = ious.T
+#     return torch.sum(1-ious)
 
-    inter_max_xy = torch.min(bboxes1[:, 2:], bboxes2[:, 2:])
-    inter_min_xy = torch.max(bboxes1[:, :2], bboxes2[:, :2])
+def box_area(boxes):
+    """
+    Computes the area of a set of bounding boxes, which are specified by its
+    (x1, y1, x2, y2) coordinates.
 
-    inter = torch.clamp((inter_max_xy - inter_min_xy), min=0)
-    inter_area = inter[:, 0] * inter[:, 1]
-    union = area1+area2-inter_area
-    ious = inter_area / union
-    ious = torch.clamp(ious, min=0, max=1.0)
-    if exchange:
-        ious = ious.T
-    return torch.sum(1-ious)
+    Arguments:
+        boxes (Tensor[N, 4]): boxes for which the area will be computed. They
+            are expected to be in (x1, y1, x2, y2) format
 
+    Returns:
+        area (Tensor[N]): area for each box
+    """
+    return (boxes[:, 2] - boxes[:, 0]) * (boxes[:, 3] - boxes[:, 1])
+
+def iou_loss(boxes1, boxes2):
+    """
+    Return intersection-over-union (Jaccard index) of boxes.
+
+    Both sets of boxes are expected to be in (x1, y1, x2, y2) format.
+
+    Arguments:
+        boxes1 (Tensor[N, 4])
+        boxes2 (Tensor[M, 4])
+
+    Returns:
+        iou (Tensor[N, M]): the NxM matrix containing the pairwise
+            IoU values for every element in boxes1 and boxes2
+    """
+    area1 = box_area(boxes1)
+    area2 = box_area(boxes2)
+
+    #  When the shapes do not match,
+    #  the shape of the returned output tensor follows the broadcasting rules
+    lt = torch.max(boxes1[:, :2], boxes2[:, :2])  # left-top [N,M,2]
+    rb = torch.min(boxes1[:, 2:], boxes2[:, 2:])  # right-bottom [N,M,2]
+
+    wh = (rb - lt).clamp(min=0)  # [N,M,2]
+    inter = wh[:, 0] * wh[:, 1]  # [N,M]
+
+    iou = inter / (area1 + area2 - inter)
+    return torch.sum(1-iou)
 
 def smooth_l1_loss(input, target, beta: float = 1. / 9, size_average: bool = True):
     """

@@ -25,7 +25,7 @@ class FasterRCNNBase(nn.Module):
             the model
     """
 
-    def __init__(self, backbone, rpn, roi_heads, transform, loss_fn, focal, cbam, double_fusion):
+    def __init__(self, backbone, rpn, roi_heads, transform, loss_fn, focal, cbam, double_fusion, val):
         super(FasterRCNNBase, self).__init__()
         self.transform = transform
         self.backbone = backbone
@@ -35,6 +35,7 @@ class FasterRCNNBase(nn.Module):
         self.focal = focal
         self.cbam = cbam
         self.double_fusion = double_fusion
+        self.val = val
         # used only on torchscript mode
         self._has_warned = False
         print("loss function: " + loss_fn)
@@ -96,10 +97,10 @@ class FasterRCNNBase(nn.Module):
         # 将特征层以及标注target信息传入rpn中
         # proposals: List[Tensor], Tensor_shape: [num_proposals, 4],
         # 每个proposals是绝对坐标，且为(x1, y1, x2, y2)格式
-        proposals, proposal_losses = self.rpn(images, features, self.loss_fn, self.focal, targets)
+        proposals, proposal_losses = self.rpn(images, features, self.loss_fn, self.focal, self.val, targets)
 
         # 将rpn生成的数据以及标注target信息传入fast rcnn后半部分
-        detections, detector_losses = self.roi_heads(features, proposals, images.image_sizes, self.loss_fn, self.focal, targets)
+        detections, detector_losses = self.roi_heads(features, proposals, images.image_sizes, self.loss_fn, self.focal, self.val, targets)
 
         # 对网络的预测结果进行后处理（主要将bboxes还原到原图像尺度上）
         detections = self.transform.postprocess(detections, images.image_sizes, original_image_sizes)
@@ -277,7 +278,9 @@ class FasterRCNN(FasterRCNNBase):
                  # 注意力机制
                  cbam=True,
                  # 改进的FPN
-                 double_fusion=True
+                 double_fusion=True,
+                 # 验证模式
+                 val=True
                  ):
         if not hasattr(backbone, "out_channels"):
             raise ValueError(
@@ -369,4 +372,4 @@ class FasterRCNN(FasterRCNNBase):
         # 对数据进行标准化，缩放，打包成batch等处理部分
         transform = GeneralizedRCNNTransform(min_size, max_size, image_mean, image_std)
 
-        super(FasterRCNN, self).__init__(backbone, rpn, roi_heads, transform, loss_fn, focal, cbam, double_fusion)
+        super(FasterRCNN, self).__init__(backbone, rpn, roi_heads, transform, loss_fn, focal, cbam, double_fusion, val)
