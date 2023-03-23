@@ -604,11 +604,11 @@ class RegionProposalNetwork(torch.nn.Module):
         # 计算目标预测概率损失
         # fixme: 给一个较大的损失权重
         if focal:
-            objectness_loss = 3. * torchvision.ops.sigmoid_focal_loss(
+            objectness_loss = torchvision.ops.sigmoid_focal_loss(
                 objectness[sampled_inds], labels[sampled_inds], reduction="mean"
             )
         else:
-            objectness_loss = 3. * F.binary_cross_entropy_with_logits(
+            objectness_loss = F.binary_cross_entropy_with_logits(
                 objectness[sampled_inds], labels[sampled_inds]
             )
 

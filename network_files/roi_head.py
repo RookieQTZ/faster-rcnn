@@ -336,7 +336,7 @@ class RoIHeads(torch.nn.Module):
         #     classification_loss = 3. * torchvision.ops.sigmoid_focal_loss(class_logits[:, 1], labels.float(), reduction="mean")
         # else:
         #     classification_loss = 3. * F.cross_entropy(class_logits, labels)
-        classification_loss = 3. * F.cross_entropy(class_logits, labels)
+        classification_loss = F.cross_entropy(class_logits, labels)
 
         # get indices that correspond to the regression targets for
         # the corresponding ground truth labels, to be used with

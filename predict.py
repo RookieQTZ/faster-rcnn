@@ -64,17 +64,17 @@ def main():
     print("using {} device.".format(device))
 
     num_classes = 2
-    loss_fn = "iou"
+    loss_fn = "l1"
     focal = False
     cbam = False
     double_fusion = False
-    anchor = 0.2
+    anchor = 64
 
     # create model
     model = create_model(num_classes, loss_fn, focal, cbam, double_fusion, anchor, val=False)
 
     # load train weights
-    weights_path = "./save_weights/iou.pth"
+    weights_path = "./save_weights/origin.pth"
     assert os.path.exists(weights_path), "{} file dose not exist.".format(weights_path)
     weights_dict = torch.load(weights_path, map_location='cpu')
 
@@ -91,7 +91,7 @@ def main():
     category_index = {str(v): str(k) for k, v in class_dict.items()}
 
     # load image
-    original_img = Image.open("./data/test/infer/004700.jpg")
+    original_img = Image.open("./data/test/infer/037_03_contrast85_2_c.jpg")
 
     # from pil image to tensor, do not normalize image
     data_transform = transforms.Compose([transforms.ToTensor()])
@@ -124,7 +124,7 @@ def main():
                              predict_classes,
                              predict_scores,
                              category_index=category_index,
-                             box_thresh=0.0,
+                             box_thresh=0.5,
                              line_thickness=3,
                              font='arial.ttf',
                              font_size=20)
