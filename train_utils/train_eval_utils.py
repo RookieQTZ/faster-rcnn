@@ -39,14 +39,15 @@ def train_one_epoch(model, optimizer, data_loader, weighted_loss_func, device, e
         with torch.cuda.amp.autocast(enabled=scaler is not None):
             loss_dict = model(images, targets)
             # 为分类损失多加点损失权重？
-            # losses = sum(loss for loss in loss_dict.values())
+            losses = sum(loss for loss in loss_dict.values())
 
             # losses, sigma = weighted_loss_func(*[loss for loss in loss_dict.values()])
 
-            cur_loss = [loss for loss in loss_dict.values()]
-            weight = get_losses_weights(cur_loss)
-            new_losses = [loss * w for loss, w in zip(cur_loss, weight)]  # new_losses: [0.6919, 0.5297, 1.8270, 0.8757])
-            losses = sum(loss for loss in new_losses)  # loss: 3.9243
+            # 自适应多任务损失权重
+            # cur_loss = [loss for loss in loss_dict.values()]
+            # weight = get_losses_weights(cur_loss)
+            # new_losses = [loss * w for loss, w in zip(cur_loss, weight)]  # new_losses: [0.6919, 0.5297, 1.8270, 0.8757])
+            # losses = sum(loss for loss in new_losses)  # loss: 3.9243
 
             if i == 0:
                 print("Epoch: [" + str(epoch) + "]  weight: " + str([str(w.item()) for w in weight]))
