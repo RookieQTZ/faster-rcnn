@@ -542,8 +542,8 @@ class RegionProposalNetwork(torch.nn.Module):
             final_scores.append(scores)
         return final_boxes, final_scores
 
-    def compute_loss(self, objectness, pred_bbox_deltas, proposals, labels, regression_targets, gt_boxes, loss_fn, focal):
-        # type: (Tensor, Tensor, List[Tensor], List[Tensor], List[Tensor], List[Tensor], str, bool) -> Tuple[Tensor, Tensor]
+    def compute_loss(self, objectness, pred_bbox_deltas, proposals, labels, regression_targets, gt_boxes, loss_fn, focal, weight):
+        # type: (Tensor, Tensor, List[Tensor], List[Tensor], List[Tensor], List[Tensor], str, bool, float) -> Tuple[Tensor, Tensor]
         """
         计算RPN损失，包括类别损失（前景与背景），bbox rgressieon损失
         Arguments:
@@ -604,11 +604,11 @@ class RegionProposalNetwork(torch.nn.Module):
         # 计算目标预测概率损失
         # fixme: 给一个较大的损失权重
         if focal:
-            objectness_loss = torchvision.ops.sigmoid_focal_loss(
+            objectness_loss = weight * torchvision.ops.sigmoid_focal_loss(
                 objectness[sampled_inds], labels[sampled_inds], reduction="mean"
             )
         else:
-            objectness_loss = F.binary_cross_entropy_with_logits(
+            objectness_loss = weight * F.binary_cross_entropy_with_logits(
                 objectness[sampled_inds], labels[sampled_inds]
             )
 
@@ -620,6 +620,7 @@ class RegionProposalNetwork(torch.nn.Module):
                 loss_fn,       # type: str
                 focal,         # type: bool
                 val,         # type: bool
+                weight,        # type: float
                 targets=None   # type: Optional[List[Dict[str, Tensor]]]
                 ):
         # type: (...) -> Tuple[List[Tensor], Dict[str, Tensor]]
@@ -683,7 +684,7 @@ class RegionProposalNetwork(torch.nn.Module):
             regression_targets = self.box_coder.encode(matched_gt_boxes, anchors)
             proposals = proposals.view(-1, 4)
             loss_objectness, loss_rpn_box_reg = self.compute_loss(
-                objectness, pred_bbox_deltas, proposals, labels, regression_targets, matched_gt_boxes, loss_fn, focal
+                objectness, pred_bbox_deltas, proposals, labels, regression_targets, matched_gt_boxes, loss_fn, focal, weight
             )
             losses = {
                 "loss_objectness": loss_objectness,

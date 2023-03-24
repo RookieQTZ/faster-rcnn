@@ -304,8 +304,8 @@ class RoIHeads(torch.nn.Module):
 
         return all_boxes, all_scores, all_labels
 
-    def fastrcnn_loss(self, class_logits, box_regression, proposals, labels, regression_targets, matched_gt_box, loss_fn, focal):
-        # type: (Tensor, Tensor, List[Tensor], List[Tensor], List[Tensor], List[Tensor], str, bool) -> Tuple[Tensor, Tensor]
+    def fastrcnn_loss(self, class_logits, box_regression, proposals, labels, regression_targets, matched_gt_box, loss_fn, focal, weight):
+        # type: (Tensor, Tensor, List[Tensor], List[Tensor], List[Tensor], List[Tensor], str, bool, float) -> Tuple[Tensor, Tensor]
         """
         Computes the loss for Faster R-CNN.
 
@@ -336,7 +336,7 @@ class RoIHeads(torch.nn.Module):
         #     classification_loss = 3. * torchvision.ops.sigmoid_focal_loss(class_logits[:, 1], labels.float(), reduction="mean")
         # else:
         #     classification_loss = 3. * F.cross_entropy(class_logits, labels)
-        classification_loss = F.cross_entropy(class_logits, labels)
+        classification_loss = weight * F.cross_entropy(class_logits, labels)
 
         # get indices that correspond to the regression targets for
         # the corresponding ground truth labels, to be used with
@@ -393,6 +393,7 @@ class RoIHeads(torch.nn.Module):
                 loss_fn,        # type: str
                 focal,          # type: bool
                 val,          # type: bool
+                weight,         # type: float
                 targets=None    # type: Optional[List[Dict[str, Tensor]]]
                 ):
         # type: (...) -> Tuple[List[Dict[str, Tensor]], Dict[str, Tensor]]
@@ -447,7 +448,7 @@ class RoIHeads(torch.nn.Module):
         if self.training or val:
             assert labels is not None and regression_targets is not None and matched_gt_box is not None
             loss_classifier, loss_box_reg = self.fastrcnn_loss(
-                class_logits, box_regression, proposals, labels, regression_targets, matched_gt_box, loss_fn, focal)
+                class_logits, box_regression, proposals, labels, regression_targets, matched_gt_box, loss_fn, focal, weight)
             losses = {
                 "loss_classifier": loss_classifier,
                 "loss_box_reg": loss_box_reg

@@ -24,7 +24,7 @@ def create_model(args, num_classes, load_pretrain_weights=True):
                                      norm_layer=torch.nn.BatchNorm2d,
                                      trainable_layers=3)
     # 训练自己数据集时不要修改这里的91，修改的是传入的num_classes参数
-    model = FasterRCNN(backbone=backbone, num_classes=91, loss_fn=args.loss_fn, focal=args.focal, cbam=args.cbam, double_fusion=args.double_fusion)
+    model = FasterRCNN(backbone=backbone, num_classes=91, loss_fn=args.loss_fn, focal=args.focal, cbam=args.cbam, double_fusion=args.double_fusion, )
 
     if load_pretrain_weights:
         # 载入预训练模型权重
@@ -166,7 +166,7 @@ def main(args):
         mean_loss, loss_dict, lr, weight = utils.train_one_epoch(model, optimizer, train_data_loader, weighted_loss_func,
                                                                  device=device, epoch=epoch, last_loss=weight,
                                                                  print_freq=50, warmup=True,
-                                                                 scaler=scaler,)
+                                                                 scaler=scaler, adaptive_weight=args.adaptive_weight)
 
         # 保存last_loss权重
         loss_weight.save(weight, loss_weight_file)
@@ -279,6 +279,10 @@ if __name__ == "__main__":
     parser.add_argument("--cbam", default=False, help="Use cbam attention block")
     # 是否使用双向融合fpn
     parser.add_argument("--double-fusion", default=False, help="Use double fusion fpn block")
+    # 是否使用自适应损失权重
+    parser.add_argument("--adaptive_weight", default=False, help="Use adaptive weight")
+    # 分类损失权重系数
+    parser.add_argument("--weight", default=1., type=float, help="class task weight")
 
     args = parser.parse_args()
     print(args)
