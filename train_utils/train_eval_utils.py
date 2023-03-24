@@ -12,7 +12,7 @@ import train_utils.distributed_utils as utils
 import plot_curve
 
 
-def train_one_epoch(model, optimizer, data_loader, weighted_loss_func, device, epoch, last_loss,
+def train_one_epoch(model, optimizer, data_loader, weighted_loss_func, device, epoch,
                     print_freq=50, warmup=False, scaler=None, adaptive_weight=False):
     model.train()
     metric_logger = utils.MetricLogger(delimiter="  ")
@@ -85,7 +85,7 @@ def train_one_epoch(model, optimizer, data_loader, weighted_loss_func, device, e
         now_lr = optimizer.param_groups[0]["lr"]
         metric_logger.update(lr=now_lr)
 
-    return mloss, loss_dict, now_lr, weight
+    return mloss, loss_dict, now_lr
 
 
 @torch.no_grad()

@@ -143,11 +143,8 @@ def main(args):
 
     # 如果指定了上次训练保存的权重文件地址，则接着上次结果接着训练
     viz = plot_curve.create_visdom(visdom_file)
-    # 上一轮loss
-    weight = torch.tensor([1.0, 1.0, 1.0, 1.0])
     if args.resume != "":
         plot_curve.load_visdom(viz, visdom_file)
-        weight = loss_weight.load(loss_weight_file)
         checkpoint = torch.load(args.resume, map_location='cpu')
         model.load_state_dict(checkpoint['model'])
         optimizer.load_state_dict(checkpoint['optimizer'])
@@ -163,13 +160,13 @@ def main(args):
 
     for epoch in range(args.start_epoch, args.epochs):
         # train for one epoch, printing every 10 iterations
-        mean_loss, loss_dict, lr, weight = utils.train_one_epoch(model, optimizer, train_data_loader, weighted_loss_func,
-                                                                 device=device, epoch=epoch, last_loss=weight,
-                                                                 print_freq=50, warmup=True,
-                                                                 scaler=scaler, adaptive_weight=args.adaptive_weight)
+        mean_loss, loss_dict, lr = utils.train_one_epoch(model, optimizer, train_data_loader, weighted_loss_func,
+                                                         device=device, epoch=epoch,
+                                                         print_freq=50, warmup=True,
+                                                         scaler=scaler, adaptive_weight=args.adaptive_weight)
 
         # 保存last_loss权重
-        loss_weight.save(weight, loss_weight_file)
+        # loss_weight.save(weight, loss_weight_file)
 
         train_loss.append(mean_loss.item())
         learning_rate.append(lr)
