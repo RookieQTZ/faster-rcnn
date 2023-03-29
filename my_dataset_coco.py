@@ -114,9 +114,9 @@ class CocoDetection(data.Dataset):
             index (int): Index
 
         Returns:
-            tuple: Tuple (List(image_with_ul), target).
+            tuple: Tuple (List(image), target).
             target is the object returned by ``coco.loadAnns``.
-            image_with_ul[0] is origin img, image_with_ul[1] is ul image
+            image is origin img
         """
         coco = self.coco
         img_id = self.ids[index]
@@ -126,15 +126,13 @@ class CocoDetection(data.Dataset):
         path = coco.loadImgs(img_id)[0]['file_name']
         # print(path)
         img = Image.open(os.path.join(self.img_root, path)).convert('RGB')
-        img_ul = Image.open(os.path.join(self.img_root, "ul_" + path.split(".")[0] + ".jpg")).convert('RGB')
-        img_with_ul = [img, img_ul]
 
         w, h = img.size
         target = self.parse_targets(img_id, coco_target, w, h)
         if self.transforms is not None:
-            img_with_ul, target = self.transforms(img_with_ul, target)
+            img, target = self.transforms(img, target)
 
-        return img_with_ul, target
+        return img, target
 
     def __len__(self):
         return len(self.ids)
@@ -154,6 +152,6 @@ class CocoDetection(data.Dataset):
 
 
 if __name__ == '__main__':
-    train = CocoDetection("/data/coco2017", dataset="train")
+    train = CocoDetection("./data/coco2017", dataset="train")
     print(len(train))
     t = train[0]

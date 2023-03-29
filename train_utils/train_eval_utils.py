@@ -28,8 +28,8 @@ def train_one_epoch(model, optimizer, data_loader, weighted_loss_func, device, e
 
     mloss = torch.zeros(1).to(device)  # mean losses
 
-    for i, [org_ul_images, targets] in enumerate(metric_logger.log_every(data_loader, print_freq, header)):
-        images = [org_ul_image[0] for org_ul_image in org_ul_images]
+    for i, [images, targets] in enumerate(metric_logger.log_every(data_loader, print_freq, header)):
+        # images = [org_ul_image[0] for org_ul_image in org_ul_images]
         # ul_images = [org_ul_image[1] for org_ul_image in org_ul_images]
 
         images = list(image.to(device) for image in images)
@@ -106,7 +106,7 @@ def evaluate(model, data_loader, epoch, last_epoch, viz, device):
 
     mloss = torch.zeros(1).to(device)  # mean losses
     for i, (images, targets) in enumerate(metric_logger.log_every(data_loader, 100, header)):
-        image = list(imgs[0].to(device) for imgs in images)
+        image = list(imgs.to(device) for imgs in images)
         targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
 
         # 当使用CPU时，跳过GPU相关指令

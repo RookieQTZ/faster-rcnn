@@ -66,15 +66,17 @@ def main():
     num_classes = 2
     loss_fn = "l1"
     focal = False
-    cbam = False
-    double_fusion = False
-    anchor = 64
+    cbam = True
+    double_fusion = True
+    anchor = 0.2
+    insulator_path = "./data/test/infer/insulator"
+    output_path = "./data/test/infer/df_res"
 
     # create model
     model = create_model(num_classes, loss_fn, focal, cbam, double_fusion, anchor, val=False)
 
     # load train weights
-    weights_path = "./save_weights/origin.pth"
+    weights_path = "./save_weights/df4.pth"
     assert os.path.exists(weights_path), "{} file dose not exist.".format(weights_path)
     weights_dict = torch.load(weights_path, map_location='cpu')
 
@@ -90,48 +92,50 @@ def main():
 
     category_index = {str(v): str(k) for k, v in class_dict.items()}
 
-    # load image
-    original_img = Image.open("./data/test/infer/037_03_contrast85_2_c.jpg")
+    filenames = os.listdir(insulator_path)
+    for filename in filenames:
+        # load image
+        original_img = Image.open(os.path.join(insulator_path, filename))
 
-    # from pil image to tensor, do not normalize image
-    data_transform = transforms.Compose([transforms.ToTensor()])
-    img = data_transform(original_img)
-    # expand batch dimension
-    img = torch.unsqueeze(img, dim=0)
+        # from pil image to tensor, do not normalize image
+        data_transform = transforms.Compose([transforms.ToTensor()])
+        img = data_transform(original_img)
+        # expand batch dimension
+        img = torch.unsqueeze(img, dim=0)
 
-    model.eval()  # 进入验证模式
-    with torch.no_grad():
-        # init
-        img_height, img_width = img.shape[-2:]
-        init_img = torch.zeros((1, 3, img_height, img_width), device=device)
-        model(init_img)
+        model.eval()  # 进入验证模式
+        with torch.no_grad():
+            # init
+            img_height, img_width = img.shape[-2:]
+            init_img = torch.zeros((1, 3, img_height, img_width), device=device)
+            model(init_img)
 
-        t_start = time_synchronized()
-        predictions = model(img.to(device))[0]
-        t_end = time_synchronized()
-        print("inference+NMS time: {}".format(t_end - t_start))
+            t_start = time_synchronized()
+            predictions = model(img.to(device))[0]
+            t_end = time_synchronized()
+            print("inference+NMS time: {}".format(t_end - t_start))
 
-        prediction = predictions[0]
-        predict_boxes = prediction["boxes"].to("cpu").numpy()
-        predict_classes = prediction["labels"].to("cpu").numpy()
-        predict_scores = prediction["scores"].to("cpu").numpy()
+            prediction = predictions[0]
+            predict_boxes = prediction["boxes"].to("cpu").numpy()
+            predict_classes = prediction["labels"].to("cpu").numpy()
+            predict_scores = prediction["scores"].to("cpu").numpy()
 
-        if len(predict_boxes) == 0:
-            print("没有检测到任何目标!")
+            if len(predict_boxes) == 0:
+                print("没有检测到任何目标!")
 
-        plot_img = draw_objs(original_img,
-                             predict_boxes,
-                             predict_classes,
-                             predict_scores,
-                             category_index=category_index,
-                             box_thresh=0.5,
-                             line_thickness=3,
-                             font='arial.ttf',
-                             font_size=20)
-        plt.imshow(plot_img)
-        plt.show()
-        # 保存预测的图片结果
-        plot_img.save("./data/test/infer/iou_result.jpg")
+            plot_img = draw_objs(original_img,
+                                 predict_boxes,
+                                 predict_classes,
+                                 predict_scores,
+                                 category_index=category_index,
+                                 box_thresh=0.5,
+                                 line_thickness=3,
+                                 font='arial.ttf',
+                                 font_size=20)
+            plt.imshow(plot_img)
+            plt.show()
+            # 保存预测的图片结果
+            plot_img.save(os.path.join(output_path, "res_" + filename))
 
 
 if __name__ == '__main__':
