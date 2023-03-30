@@ -111,6 +111,8 @@ def main(args):
 
     # create model num_classes equal background + 20 classes
     model = create_model(args, num_classes=args.num_classes + 1)
+    print("using focal: " + str(args.focal))
+    print("using adaptive_weight: " + str(args.adaptive_weight))
     # print(model)
 
     model.to(device)
@@ -229,6 +231,9 @@ def main(args):
 if __name__ == "__main__":
     import argparse
 
+    def str2bool(s):
+        return True if s.lower() == "true" else False
+
     parser = argparse.ArgumentParser(
         description=__doc__)
 
@@ -267,17 +272,19 @@ if __name__ == "__main__":
                         help='batch size when training.')
     parser.add_argument('--aspect-ratio-group-factor', default=3, type=int)
     # 是否使用混合精度训练(需要GPU支持混合精度)
-    parser.add_argument("--amp", default=False, help="Use torch.cuda.amp for mixed precision training")
+    parser.add_argument("--amp", default=False, type=str2bool, help="Use torch.cuda.amp for mixed precision training")
+    # parser.add_argument("--amp", action="store_true",
+    #                     help="Use torch.cuda.amp for mixed precision training")
     # 使用的损失函数
-    parser.add_argument("--loss-fn", default='iou', help="loss function to use")
+    parser.add_argument("--loss-fn", default='l1', help="loss function to use")
     # 是否使用Focal loss
-    parser.add_argument("--focal", default=False, help="Use focal loss")
+    parser.add_argument("--focal", default=False, type=str2bool, help="Use focal loss")
     # 是否使用cbam注意力机制
-    parser.add_argument("--cbam", default=False, help="Use cbam attention block")
+    parser.add_argument("--cbam", default=False, type=str2bool, help="Use cbam attention block")
     # 是否使用双向融合fpn
-    parser.add_argument("--double-fusion", default=False, help="Use double fusion fpn block")
+    parser.add_argument("--double-fusion", default=False, type=str2bool, help="Use double fusion fpn block")
     # 是否使用自适应损失权重
-    parser.add_argument("--adaptive_weight", default=False, help="Use adaptive weight")
+    parser.add_argument("--adaptive_weight", default=False, type=str2bool, help="Use adaptive weight")
     # 分类损失权重系数
     parser.add_argument("--weight", default=1., type=float, help="class task weight")
 
