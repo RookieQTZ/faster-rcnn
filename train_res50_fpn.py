@@ -144,9 +144,9 @@ def main(args):
                                                    gamma=0.5)
 
     # 如果指定了上次训练保存的权重文件地址，则接着上次结果接着训练
-    viz = plot_curve.create_visdom(visdom_file)
+    # viz = plot_curve.create_visdom(visdom_file)
     if args.resume != "":
-        plot_curve.load_visdom(viz, visdom_file)
+        # plot_curve.load_visdom(viz, visdom_file)
         checkpoint = torch.load(args.resume, map_location='cpu')
         model.load_state_dict(checkpoint['model'])
         optimizer.load_state_dict(checkpoint['optimizer'])
@@ -180,7 +180,7 @@ def main(args):
         # todo: 最后一个epoch，才绘制pr曲线
         # todo: 拿到所有ap、ar信息，分别保存
         # todo: 所有损失
-        coco_info = utils.evaluate(model, val_data_set_loader, epoch, args.epochs - 1, viz, device=device)
+        coco_info = utils.evaluate(model, val_data_set_loader, epoch, args.epochs - 1, device=device)
 
         # write into txt
         with open(results_file, "a") as f:
@@ -202,19 +202,19 @@ def main(args):
         torch.save(save_files, "./save_weights/resNetFpn-model-{}.pth".format(epoch))
 
         # 损失曲线
-        plot_curve.visdom_draw(viz, mean_loss, epoch, title='Loss', ylabel='loss')
-        plot_curve.visdom_draw(viz, loss_dict['loss_classifier'], epoch, title='Loss Classifier', ylabel='loss')
-        plot_curve.visdom_draw(viz, loss_dict['loss_box_reg'], epoch, title='Loss Box Reg', ylabel='loss')
-        plot_curve.visdom_draw(viz, loss_dict['loss_objectness'], epoch, title='Loss Objectness', ylabel='loss')
-        plot_curve.visdom_draw(viz, loss_dict['loss_rpn_box_reg'], epoch, title='Loss Rpn Box Reg', ylabel='loss')
-        # ap ar
-        plot_curve.visdom_draw(viz, coco_info[0], epoch, title='mAP', ylabel='mAP')
-        plot_curve.visdom_draw(viz, coco_info[3], epoch, title='AP Small', ylabel='AP')
-        plot_curve.visdom_draw(viz, coco_info[4], epoch, title='AP Medium', ylabel='AP')
-        plot_curve.visdom_draw(viz, coco_info[5], epoch, title='AP Large', ylabel='AP')
-        plot_curve.visdom_draw(viz, coco_info[9], epoch, title='AR Small', ylabel='AR')
-        plot_curve.visdom_draw(viz, coco_info[10], epoch, title='AR Medium', ylabel='AR')
-        plot_curve.visdom_draw(viz, coco_info[11], epoch, title='AR Large', ylabel='AR')
+        # plot_curve.visdom_draw(viz, mean_loss, epoch, title='Loss', ylabel='loss')
+        # plot_curve.visdom_draw(viz, loss_dict['loss_classifier'], epoch, title='Loss Classifier', ylabel='loss')
+        # plot_curve.visdom_draw(viz, loss_dict['loss_box_reg'], epoch, title='Loss Box Reg', ylabel='loss')
+        # plot_curve.visdom_draw(viz, loss_dict['loss_objectness'], epoch, title='Loss Objectness', ylabel='loss')
+        # plot_curve.visdom_draw(viz, loss_dict['loss_rpn_box_reg'], epoch, title='Loss Rpn Box Reg', ylabel='loss')
+        # # ap ar
+        # plot_curve.visdom_draw(viz, coco_info[0], epoch, title='mAP', ylabel='mAP')
+        # plot_curve.visdom_draw(viz, coco_info[3], epoch, title='AP Small', ylabel='AP')
+        # plot_curve.visdom_draw(viz, coco_info[4], epoch, title='AP Medium', ylabel='AP')
+        # plot_curve.visdom_draw(viz, coco_info[5], epoch, title='AP Large', ylabel='AP')
+        # plot_curve.visdom_draw(viz, coco_info[9], epoch, title='AR Small', ylabel='AR')
+        # plot_curve.visdom_draw(viz, coco_info[10], epoch, title='AR Medium', ylabel='AR')
+        # plot_curve.visdom_draw(viz, coco_info[11], epoch, title='AR Large', ylabel='AR')
         # pr
 
     # plot loss and lr curve
@@ -276,7 +276,7 @@ if __name__ == "__main__":
     # parser.add_argument("--amp", action="store_true",
     #                     help="Use torch.cuda.amp for mixed precision training")
     # 使用的损失函数
-    parser.add_argument("--loss-fn", default='l1', help="loss function to use")
+    parser.add_argument("--loss-fn", default='diou', help="loss function to use")
     # 是否使用Focal loss
     parser.add_argument("--focal", default=False, type=str2bool, help="Use focal loss")
     # 是否使用cbam注意力机制

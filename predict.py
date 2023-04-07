@@ -63,20 +63,27 @@ def main():
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print("using {} device.".format(device))
 
+    #################### 修改这里 ####################
     num_classes = 2
     loss_fn = "l1"
     focal = False
+    # 是否使用cbam
     cbam = True
+    # 是否使用df
     double_fusion = True
     anchor = 0.2
-    insulator_path = "./data/test/infer/insulator"
-    output_path = "./data/test/infer/df_res"
+    # 权重地址
+    weights_path = "./save_weights/new_origin4.pth"
+    # 待检测图片
+    insulator_path = "./data/infer/insulator"
+    # 检测结果
+    output_path = "./data/infer/new_origin"
+    #################### 修改这里 ####################
 
     # create model
     model = create_model(num_classes, loss_fn, focal, cbam, double_fusion, anchor, val=False)
 
     # load train weights
-    weights_path = "./save_weights/df4.pth"
     assert os.path.exists(weights_path), "{} file dose not exist.".format(weights_path)
     weights_dict = torch.load(weights_path, map_location='cpu')
 

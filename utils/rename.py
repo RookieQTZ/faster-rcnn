@@ -2,12 +2,17 @@ import os
 
 
 # 对所有文件以数字递增的方式重命名
+import random
+
+
 def file_rename():
-    i = 100000
+    i = 200000
     # 需要重命名的文件绝对路径
-    path = r"F:\桌面\创新港绝缘子"
+    path = r"F:\桌面\绝缘子4.5"
     # 读取该文件夹下所有的文件
     filelist = os.listdir(path)
+    # 随机打乱
+    random.shuffle(filelist)
     # 遍历所有文件
     for files in filelist:
         Olddir = os.path.join(path, files)  # 原来的文件路径

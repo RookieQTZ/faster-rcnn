@@ -447,125 +447,65 @@ def ciou_loss(bboxes1, bboxes2):
 
 
 # DIoU Loss
-def diou_loss(bboxes1, bboxes2):
-    # this is from official website:
-    # https://github.com/Zzh-tju/CIoU/blob/master/layers/modules/multibox_loss.py
-    rows = bboxes1.shape[0]
-    cols = bboxes2.shape[0]
-    cious = torch.zeros((rows, cols))
-    if rows * cols == 0:
-        return cious
-    exchange = False
-    if bboxes1.shape[0] > bboxes2.shape[0]:
-        bboxes1, bboxes2 = bboxes2, bboxes1
-        cious = torch.zeros((cols, rows))
-        exchange = True
-    ######## iou ########
-    area1 = (bboxes1[:, 2] - bboxes1[:, 0]) * (
-            bboxes1[:, 3] - bboxes1[:, 1])
-    area2 = (bboxes2[:, 2] - bboxes2[:, 0]) * (
-            bboxes2[:, 3] - bboxes2[:, 1])
+def diou_loss(boxes1, boxes2):
+    area1 = box_area(boxes1)
+    area2 = box_area(boxes2)
 
-    inter_max_xy = torch.min(bboxes1[:, 2:], bboxes2[:, 2:])
-    inter_min_xy = torch.max(bboxes1[:, :2], bboxes2[:, :2])
+    #  cal inner
+    inner_lt = torch.max(boxes1[:, :2], boxes2[:, :2])  # left-top [N,M,2]
+    inner_rb = torch.min(boxes1[:, 2:], boxes2[:, 2:])  # right-bottom [N,M,2]
+    inner_wh = (inner_rb - inner_lt).clamp(min=0)  # [N,M,2]
+    inner = inner_wh[:, 0] * inner_wh[:, 1]  # [N,M]
 
-    inter = torch.clamp((inter_max_xy - inter_min_xy), min=0)
-    inter_area = inter[:, 0] * inter[:, 1]
-    union = area1 + area2 - inter_area
-    iou = inter_area / union
-    ######## iou ########
+    # cal enclosing
+    outer_lt = torch.min(boxes1[:, :2], boxes2[:, :2])
+    outer_rb = torch.max(boxes1[:, 2:], boxes2[:, 2:])
+    outer_wh = (outer_rb - outer_lt).clamp(min=0)
+    outer = outer_wh[:, 0] * outer_wh[:, 1]
 
-    # x1 y1 x2 y2
-    w1 = bboxes1[:, 2] - bboxes1[:, 0]
-    w2 = bboxes2[:, 2] - bboxes2[:, 0]
-    h1 = bboxes1[:, 3] - bboxes1[:, 1]
-    h2 = bboxes2[:, 3] - bboxes2[:, 1]
+    # cal center
+    center_lt = (inner_rb + outer_lt) / 2
+    center_rb = (inner_lt + outer_rb) / 2
+    center_wh = (center_rb - center_lt).clamp(min=0)
 
-    center_x1 = (bboxes1[:, 2] + bboxes1[:, 0]) / 2
-    center_x2 = (bboxes2[:, 2] + bboxes2[:, 0]) / 2
-    center_y1 = (bboxes1[:, 1] + bboxes1[:, 3]) / 2
-    center_y2 = (bboxes2[:, 1] + bboxes2[:, 3]) / 2
+    # cal d2
+    center_wh2 = center_wh ** 2
+    d2 = center_wh2[:, 0] + center_wh2[:, 1]
 
-    c_l = torch.min(center_x1 - w1 / 2, center_x2 - w2 / 2)
-    c_r = torch.max(center_x1 + w1 / 2, center_x2 + w2 / 2)
-    c_t = torch.min(center_y1 - h1 / 2, center_y2 - h2 / 2)
-    c_b = torch.max(center_y1 + h1 / 2, center_y2 + h2 / 2)
+    # cal c2
+    outer_wh2 = outer_wh ** 2
+    c2 = outer_wh2[:, 0] + outer_wh2[:, 1]
 
-    inter_diag = (center_x2 - center_x1)**2 + (center_y2 - center_y1)**2
-    c_diag = torch.clamp((c_r - c_l), min=0)**2 + torch.clamp((c_b - c_t), min=0)**2
-
-    u = inter_diag / c_diag
-    dious = iou - u
-    dious = torch.clamp(dious, min=-1.0, max=1.0)
-    if exchange:
-        dious = dious.T
-    return torch.sum(1 - dious)
-
+    # cal iou giou
+    union = area1 + area2 - inner
+    iou = inner / union
+    diou = iou - d2 / c2
+    diou = torch.clamp(diou, min=-1.0, max=1.0)
+    return 1 - torch.sum(diou)
 
 # GIoU Loss
-def giou_loss(bboxes1, bboxes2):
-    rows = bboxes1.shape[0]
-    cols = bboxes2.shape[0]
-    ious = torch.zeros((rows, cols))
-    if rows * cols == 0:
-        return ious
-    exchange = False
-    if bboxes1.shape[0] > bboxes2.shape[0]:
-        bboxes1, bboxes2 = bboxes2, bboxes1
-        ious = torch.zeros((cols, rows))
-        exchange = True
-    area1 = (bboxes1[:, 2] - bboxes1[:, 0]) * (
-        bboxes1[:, 3] - bboxes1[:, 1])
-    area2 = (bboxes2[:, 2] - bboxes2[:, 0]) * (
-        bboxes2[:, 3] - bboxes2[:, 1])
+def giou_loss(boxes1, boxes2):
+    area1 = box_area(boxes1)
+    area2 = box_area(boxes2)
 
-    inter_max_xy = torch.min(bboxes1[:, 2:], bboxes2[:, 2:])
-    inter_min_xy = torch.max(bboxes1[:, :2], bboxes2[:, :2])
+    #  cal inner
+    inner_lt = torch.max(boxes1[:, :2], boxes2[:, :2])  # left-top [N,M,2]
+    inner_rb = torch.min(boxes1[:, 2:], boxes2[:, 2:])  # right-bottom [N,M,2]
+    inner_wh = (inner_rb - inner_lt).clamp(min=0)  # [N,M,2]
+    inner = inner_wh[:, 0] * inner_wh[:, 1]  # [N,M]
 
-    out_max_xy = torch.max(bboxes1[:, 2:], bboxes2[:, 2:])
-    out_min_xy = torch.min(bboxes1[:, :2], bboxes2[:, :2])
+    # cal enclosing
+    outer_lt = torch.min(boxes1[:, :2], boxes2[:, :2])
+    outer_rb = torch.max(boxes1[:, 2:], boxes2[:, 2:])
+    outer_wh = (outer_rb - outer_lt).clamp(min=0)
+    outer = outer_wh[:, 0] * outer_wh[:, 1]
 
-    inter = torch.clamp((inter_max_xy - inter_min_xy), min=0)
-    inter_area = inter[:, 0] * inter[:, 1]
-    outer = torch.clamp((out_max_xy - out_min_xy), min=0)
-    outer_area = outer[:, 0] * outer[:, 1]
-    union = area1+area2-inter_area
-    closure = outer_area
-
-    ious = inter_area / union - (closure - union) / closure
-    ious = torch.clamp(ious, min=-1.0, max=1.0)
-    if exchange:
-        ious = ious.T
-    return torch.sum(1-ious)
-
-
-# def iou_loss(bboxes1, bboxes2):
-#     rows = bboxes1.shape[0]
-#     cols = bboxes2.shape[0]
-#     ious = torch.zeros((rows, cols))
-#     if rows * cols == 0:
-#         return ious
-#     exchange = False
-#     if bboxes1.shape[0] > bboxes2.shape[0]:
-#         bboxes1, bboxes2 = bboxes2, bboxes1
-#         ious = torch.zeros((cols, rows))
-#         exchange = True
-#     area1 = (bboxes1[:, 2] - bboxes1[:, 0]) * (
-#         bboxes1[:, 3] - bboxes1[:, 1])
-#     area2 = (bboxes2[:, 2] - bboxes2[:, 0]) * (
-#         bboxes2[:, 3] - bboxes2[:, 1])
-#
-#     inter_max_xy = torch.min(bboxes1[:, 2:], bboxes2[:, 2:])
-#     inter_min_xy = torch.max(bboxes1[:, :2], bboxes2[:, :2])
-#
-#     inter = torch.clamp((inter_max_xy - inter_min_xy), min=0)
-#     inter_area = inter[:, 0] * inter[:, 1]
-#     union = area1+area2-inter_area
-#     ious = inter_area / union
-#     ious = torch.clamp(ious, min=0, max=1.0)
-#     if exchange:
-#         ious = ious.T
-#     return torch.sum(1-ious)
+    # cal iou giou
+    union = area1 + area2 - inner
+    iou = inner / union
+    giou = iou - (outer - union) / outer
+    giou = torch.clamp(giou, min=-1.0, max=1.0)
+    return 1 - torch.sum(giou)
 
 def box_area(boxes):
     """
@@ -621,3 +561,14 @@ def smooth_l1_loss(input, target, beta: float = 1. / 9, size_average: bool = Tru
     if size_average:
         return loss.mean()
     return loss.sum()
+
+if __name__ == '__main__':
+    boxes1 = torch.tensor(
+        [[1, 1, 3, 3, ],
+         [1, 1, 3, 3, ]]
+    )
+    boxes2 = torch.tensor(
+        [[2, 2, 4, 4, ],
+         [2, 2, 4, 4, ]]
+    )
+    loss = diou_loss(boxes1, boxes2)

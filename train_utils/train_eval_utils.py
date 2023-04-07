@@ -89,7 +89,7 @@ def train_one_epoch(model, optimizer, data_loader, weighted_loss_func, device, e
 
 
 @torch.no_grad()
-def evaluate(model, data_loader, epoch, last_epoch, viz, device):
+def evaluate(model, data_loader, epoch, last_epoch, device, viz=None):
 
     cpu_device = torch.device("cpu")
     model.eval()
@@ -141,9 +141,9 @@ def evaluate(model, data_loader, epoch, last_epoch, viz, device):
     coco_evaluator.summarize()
 
     # coco_evaluator找到数据，绘制pr曲线
-    if epoch == last_epoch:
-        # evaluate_predictions_on_coco(coco_evaluator.coco_eval[iou_types[0]])
-        plot_curve.visdom_pr(viz, coco_evaluator.coco_eval[iou_types[0]])
+    # if epoch == last_epoch:
+    #     # evaluate_predictions_on_coco(coco_evaluator.coco_eval[iou_types[0]])
+    #     plot_curve.visdom_pr(viz, coco_evaluator.coco_eval[iou_types[0]])
 
     coco_info = coco_evaluator.coco_eval[iou_types[0]].stats.tolist()  # numpy to list
 

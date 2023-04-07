@@ -74,7 +74,7 @@ if __name__ == '__main__':
     output_path = r"../data/enhance/" + mode + "/res"
     filenames = os.listdir(file_path)
     # 文件名从 110000 开始
-    i = 110000
+    i = 210000
     for filename in filenames:
         # 跳过txt文件
         if not filename.endswith(".jpg"):
