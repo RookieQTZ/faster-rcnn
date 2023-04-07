@@ -481,7 +481,7 @@ def diou_loss(boxes1, boxes2):
     iou = inner / union
     diou = iou - d2 / c2
     diou = torch.clamp(diou, min=-1.0, max=1.0)
-    return 1 - torch.sum(diou)
+    return torch.sum(1-diou)
 
 # GIoU Loss
 def giou_loss(boxes1, boxes2):
@@ -505,7 +505,7 @@ def giou_loss(boxes1, boxes2):
     iou = inner / union
     giou = iou - (outer - union) / outer
     giou = torch.clamp(giou, min=-1.0, max=1.0)
-    return 1 - torch.sum(giou)
+    return torch.sum(1-giou)
 
 def box_area(boxes):
     """
