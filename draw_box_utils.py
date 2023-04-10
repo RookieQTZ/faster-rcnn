@@ -141,6 +141,8 @@ def draw_objs(image: Image,
         for box, cls, score, color in zip(boxes, classes, scores, colors):
             left, top, right, bottom = box
             # 绘制目标边界框
+            # LightGreen ForestGreen DeepSkyBlue BlueViolet
+            # color = "ForestGreen"
             draw.line([(left, top), (left, bottom), (right, bottom),
                        (right, top), (left, top)], width=line_thickness, fill=color)
             # 绘制类别和概率信息

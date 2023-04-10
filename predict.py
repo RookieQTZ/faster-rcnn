@@ -11,6 +11,7 @@ from torchvision import transforms
 from network_files import FasterRCNN, FastRCNNPredictor, AnchorsGenerator
 from backbone import resnet50_fpn_backbone, MobileNetV2
 from draw_box_utils import draw_objs
+from utils import evaluate
 
 
 def create_model(num_classes, loss_fn, focal, cbam, double_fusion, anchor, val):
@@ -65,19 +66,27 @@ def main():
 
     #################### 修改这里 ####################
     num_classes = 2
-    loss_fn = "l1"
+    loss_fn = "giou"
     focal = False
     # 是否使用cbam
-    cbam = True
+    cbam = False
     # 是否使用df
-    double_fusion = True
+    double_fusion = False
     anchor = 0.2
     # 权重地址
     weights_path = "./save_weights/new_origin4.pth"
     # 待检测图片
-    insulator_path = "./data/infer/insulator"
+    # "./data/infer/insulator"
+    # "./data/test/evaluate/pre/insulator"
+    insulator_path = "F:\desktop\\tmp"
     # 检测结果
-    output_path = "./data/infer/new_origin"
+    # "./data/infer/giou"
+    # "./data/test/evaluate/pre/res/res.jpg"
+    output_path = "F:\desktop\\tmp\\res"
+    # 是否进行紫外诊断
+    ul_eval = False
+    ul_org_path = "./data/test/evaluate/pre/large_primary.jpg"
+    ul_path = "./data/test/evaluate/pre/large_primary_gray.jpg"
     #################### 修改这里 ####################
 
     # create model
@@ -101,6 +110,9 @@ def main():
 
     filenames = os.listdir(insulator_path)
     for filename in filenames:
+        olddir = os.path.join(insulator_path, filename)  # 原来的文件路径
+        if os.path.isdir(olddir):  # 如果是文件夹则跳过
+            continue
         # load image
         original_img = Image.open(os.path.join(insulator_path, filename))
 
@@ -130,19 +142,22 @@ def main():
             if len(predict_boxes) == 0:
                 print("没有检测到任何目标!")
 
-            plot_img = draw_objs(original_img,
-                                 predict_boxes,
-                                 predict_classes,
-                                 predict_scores,
-                                 category_index=category_index,
-                                 box_thresh=0.5,
-                                 line_thickness=3,
-                                 font='arial.ttf',
-                                 font_size=20)
-            plt.imshow(plot_img)
-            plt.show()
-            # 保存预测的图片结果
-            plot_img.save(os.path.join(output_path, "res_" + filename))
+            if not ul_eval:
+                plot_img = draw_objs(original_img,
+                                     predict_boxes,
+                                     predict_classes,
+                                     predict_scores,
+                                     category_index=category_index,
+                                     box_thresh=0.5,
+                                     line_thickness=3,
+                                     font='arial.ttf',
+                                     font_size=20)
+                plt.imshow(plot_img)
+                plt.show()
+                # 保存预测的图片结果
+                plot_img.save(os.path.join(output_path, "res_" + filename))
+            else:
+                evaluate.evaluate(predict_boxes, ul_org_path, ul_path, output_path)
 
 
 if __name__ == '__main__':
