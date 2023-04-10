@@ -116,8 +116,8 @@ class FeaturePyramidNetwork(nn.Module):
                 channel_block_module = ChannelAttention(out_channels)
                 self.channel_blocks.append(channel_block_module)
             # extra block 也需要对应注意力模块
-            channel_block_module = ChannelAttention(out_channels)
-            self.channel_blocks.append(channel_block_module)
+            # channel_block_module = ChannelAttention(out_channels)
+            # self.channel_blocks.append(channel_block_module)
 
         if spatial_attention is None:
             self.spatial_attention = SpatialAttention()
@@ -289,6 +289,15 @@ class FeaturePyramidNetwork(nn.Module):
                 results.insert(0, self.get_result_from_layer_blocks(last_inner, idx))
 
         # fixme: 注意力机制
+        x = results
+        if cbam:
+            # 此时，x为resnet50 layer1 layer2 layer3 layer4的输出
+            # 通道注意力机制
+            x = self.get_channel_result(x)
+
+            # 空间注意力机制
+            x = self.get_attention_result(x)
+        results = x
 
         if double_fusion:
             # 残差下采样fpn -> 3*3卷积
@@ -312,16 +321,15 @@ class FeaturePyramidNetwork(nn.Module):
                 results, names = self.extra_blocks(results, x, names)
 
         # fixme: 注意力机制
-        x = results
-        if cbam:
-            # 此时，x为resnet50 layer1 layer2 layer3 layer4的输出
-            # 通道注意力机制
-            x = self.get_channel_result(x)
-
-            # 空间注意力机制
-            x = self.get_attention_result(x)
-
-        results = x
+        # x = results
+        # if cbam:
+        #     # 此时，x为resnet50 layer1 layer2 layer3 layer4的输出
+        #     # 通道注意力机制
+        #     x = self.get_channel_result(x)
+        #
+        #     # 空间注意力机制
+        #     x = self.get_attention_result(x)
+        # results = x
 
         # make it back an OrderedDict
         out = OrderedDict([(k, v) for k, v in zip(names, results)])
