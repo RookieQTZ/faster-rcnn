@@ -276,11 +276,11 @@ if __name__ == "__main__":
     # parser.add_argument("--amp", action="store_true",
     #                     help="Use torch.cuda.amp for mixed precision training")
     # 使用的损失函数
-    parser.add_argument("--loss-fn", default='diou', help="loss function to use")
+    parser.add_argument("--loss-fn", default='l1', help="loss function to use")
     # 是否使用Focal loss
     parser.add_argument("--focal", default=False, type=str2bool, help="Use focal loss")
     # 是否使用cbam注意力机制
-    parser.add_argument("--cbam", default=False, type=str2bool, help="Use cbam attention block")
+    parser.add_argument("--cbam", default=True, type=str2bool, help="Use cbam attention block")
     # 是否使用双向融合fpn
     parser.add_argument("--double-fusion", default=False, type=str2bool, help="Use double fusion fpn block")
     # 是否使用自适应损失权重

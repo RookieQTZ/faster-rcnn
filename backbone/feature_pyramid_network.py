@@ -111,8 +111,13 @@ class FeaturePyramidNetwork(nn.Module):
             for in_channels in in_channels_list:
                 if in_channels == 0:
                     continue
-                channel_block_module = ChannelAttention(in_channels)
+                # 注意力模块放在fpn前面 或 fpn最后
+                # channel_block_module = ChannelAttention(in_channels)
+                channel_block_module = ChannelAttention(out_channels)
                 self.channel_blocks.append(channel_block_module)
+            # extra block 也需要对应注意力模块
+            channel_block_module = ChannelAttention(out_channels)
+            self.channel_blocks.append(channel_block_module)
 
         if spatial_attention is None:
             self.spatial_attention = SpatialAttention()
@@ -253,13 +258,13 @@ class FeaturePyramidNetwork(nn.Module):
         x = list(x.values())
 
         # fixme: 注意力机制
-        if cbam:
-            # 此时，x为resnet50 layer1 layer2 layer3 layer4的输出
-            # 通道注意力机制
-            x = self.get_channel_result(x)
-
-            # 空间注意力机制
-            x = self.get_attention_result(x)
+        # if cbam:
+        #     # 此时，x为resnet50 layer1 layer2 layer3 layer4的输出
+        #     # 通道注意力机制
+        #     x = self.get_channel_result(x)
+        #
+        #     # 空间注意力机制
+        #     x = self.get_attention_result(x)
 
         # 将resnet layer4的channel调整到指定的out_channels
         # last_inner = self.inner_blocks[-1](x[-1])
@@ -305,6 +310,18 @@ class FeaturePyramidNetwork(nn.Module):
             # 在layer4对应的预测特征层基础上生成预测特征矩阵5
             if self.extra_blocks is not None:
                 results, names = self.extra_blocks(results, x, names)
+
+        # fixme: 注意力机制
+        x = results
+        if cbam:
+            # 此时，x为resnet50 layer1 layer2 layer3 layer4的输出
+            # 通道注意力机制
+            x = self.get_channel_result(x)
+
+            # 空间注意力机制
+            x = self.get_attention_result(x)
+
+        results = x
 
         # make it back an OrderedDict
         out = OrderedDict([(k, v) for k, v in zip(names, results)])
